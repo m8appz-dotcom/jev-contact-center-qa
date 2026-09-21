@@ -21,7 +21,7 @@ diferencias menores del 25 % cuentan como empate.
 | Intervenciones humanas | 0 | — |
 | Verificación a la primera | no (2 intentos: un byte nulo en el fuente y una comparación de flotantes) | — |
 | Tests ocultos pasados | no ejecutados (no existe el directorio holdout) | — |
-| Líneas del diff | 1.283 añadidas, 1 modificada (8 archivos) | — |
+| Líneas del diff | 2.123 añadidas, 2 borradas (10 archivos, `base-f1..47789df`) | — |
 
 ### Qué falta para que la comparación sea válida
 
