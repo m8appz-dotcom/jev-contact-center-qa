@@ -1,0 +1,567 @@
+id,agente,cliente,campaña,fecha,texto,saludo,verifica_identidad,escucha_activa,diagnostico,solucion_o_derivacion,tono_respetuoso,compromiso_realista,cierre,riesgo_esperado,motivo_esperado,ambiguo,pii_sembrada,no_tapar,notas
+INT-001,Rosa Delgado,María López,telco_hogar,2026-08-03,"Agente: Buenos días, gracias por llamar a Telco Hogar, le habla Rosa Delgado, ¿con quién tengo el gusto?
+Cliente: Buenos días, soy María López.
+Agente: Con gusto, María. Para poder revisar su cuenta, ¿me confirma su número de cédula, por favor?
+Cliente: Claro, 1712345675.
+Agente: Perfecto, gracias. Cuénteme, ¿en qué le puedo ayudar?
+Cliente: El internet se me corta cada media hora desde el sábado.
+Agente: Entiendo, entonces el servicio se le cae de forma intermitente cada treinta minutos desde el sábado, ¿es correcto?
+Cliente: Exactamente.
+Agente: ¿Las luces del módem se ponen en rojo cuando pasa, o quedan en verde?
+Cliente: Se pone roja la del medio.
+Agente: ¿Y ya intentó desconectarlo y volverlo a conectar?
+Cliente: Sí, dos veces, y vuelve a pasar.
+Agente: Gracias, eso me ayuda. Voy a generar una visita técnica. El plan suyo es de $19,90 mensuales y la visita no tiene costo. Le queda agendada para el 15/08/2026 en la mañana; el área técnica la confirma por mensaje al 0991234567 dentro de 48 horas. También le envío la orden a maria.lopez@correo.com.
+Cliente: Muy bien, gracias.
+Agente: ¿Hay algo más en lo que le pueda ayudar?
+Cliente: No, eso es todo.
+Agente: Que tenga un buen día, María. Gracias por llamar a Telco Hogar.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,servicio_tecnico,no,1712345675|0991234567|maria.lopez@correo.com,"$19,90|15/08/2026|48 horas",Llamada modelo: cumple los ocho ítems.
+INT-002,Kevin Morales,Jorge Andrade,banca_tarjetas,2026-08-03,"Agente: Banco del Litoral, buenas tardes, le atiende Kevin Morales.
+Cliente: Buenas tardes, tengo un consumo que no reconozco en mi tarjeta.
+Agente: Lamento el inconveniente. Antes de revisar el movimiento necesito validar su identidad: ¿me indica su cédula?
+Cliente: 0923456784.
+Agente: Gracias, señor Andrade. Entonces, si le entiendo bien, hay un cargo en su estado de cuenta que usted no realizó, ¿correcto?
+Cliente: Sí, uno de $342,80.
+Agente: ¿Recuerda la fecha del consumo y el nombre del comercio que aparece?
+Cliente: Dice 02/08/2026 y un comercio en el exterior.
+Agente: ¿Tuvo la tarjeta con usted ese día?
+Cliente: Sí, siempre la tengo yo.
+Agente: Perfecto. Voy a bloquear la tarjeta terminada en 8902 y abrir un reclamo por desconocimiento de consumo. El caso pasa al área de fraude, que tiene hasta quince días hábiles para resolver; no le puedo adelantar el resultado, pero el número de caso llega hoy a jorge.andrade@correo.com. Su cupo de $1.250,00 queda disponible con la tarjeta de reposición.
+Cliente: ¿Y mientras tanto?
+Agente: Mientras tanto el valor queda en revisión y no se le cobra interés sobre ese rubro. ¿Le puedo ayudar en algo más?
+Cliente: No, gracias.
+Agente: Gracias a usted por llamar al Banco del Litoral. Buenas tardes.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,facturacion,no,0923456784|jorge.andrade@correo.com,"$342,80|$1.250,00|02/08/2026","Consumo no reconocido, gestionado bien de principio a fin."
+INT-003,Jhoanna Pérez,Verónica Castillo,seguros_salud,2026-08-04,"Agente: Seguros Andinos, buenos días, le habla Jhoanna Pérez.
+Cliente: Hola, quería saber si mi plan cubre terapia física.
+Agente: Con mucho gusto. ¿Me confirma su número de cédula para ubicar su plan?
+Cliente: 0109876540.
+Agente: Gracias, señora Castillo. Usted quiere saber si las sesiones de terapia física entran en la cobertura de su plan actual, ¿verdad?
+Cliente: Sí, eso.
+Agente: ¿La terapia es por una lesión o por una condición de tratamiento continuo?
+Cliente: Por una lesión de rodilla, con orden del traumatólogo.
+Agente: En su plan la terapia física con orden médica está cubierta al setenta por ciento después del deducible, que en su caso es de $45,00 por evento. La autorización la emite el área médica y se demora hasta 30 días si piden más exámenes, aunque normalmente sale antes. Le dejo registrada la consulta y le doy el número de la línea médica: 022345678.
+Cliente: Perfecto, muchas gracias.
+Agente: ¿Algo más en lo que le pueda colaborar?
+Cliente: No, nada más.
+Agente: Que esté muy bien, gracias por comunicarse con Seguros Andinos.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,informacion,no,0109876540|022345678,"$45,00|30 días",Consulta de cobertura sin gestión; verificación pedida igual.
+INT-004,Byron Cedeño,Luis Zambrano,telco_movil,2026-08-04,"Agente: Telco Móvil, buenas tardes, le habla Byron Cedeño.
+Cliente: Buenas, quiero subir mi plan porque se me acaban los datos.
+Agente: Claro que sí. ¿Me confirma su cédula para revisar su línea?
+Cliente: 1804567897.
+Agente: Gracias, señor Zambrano. Entonces su plan actual se le queda corto en datos y quiere migrar a uno mayor, ¿es así?
+Cliente: Sí, correcto.
+Agente: ¿Cuántos gigas le suelen faltar al mes, más o menos?
+Cliente: Como 5 GB, siempre me quedo sin datos la última semana.
+Agente: Con eso le sirve el plan de $25,00 que trae diez gigas. El cambio aplica desde su próximo ciclo, el 10/08/2026, y no tiene costo de migración. ¿Lo dejamos activado?
+Cliente: Sí, por favor.
+Agente: Listo, queda registrado. Le llega la confirmación por mensaje al 0987654321 y el detalle a luis.zambrano@correo.com. ¿Necesita algo más?
+Cliente: No, eso era todo.
+Agente: Gracias por llamar a Telco Móvil, que tenga buena tarde.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,activacion,no,1804567897|0987654321|luis.zambrano@correo.com,"$25,00|5 GB|10/08/2026",Cambio de plan resuelto en la llamada.
+INT-005,Mishell Quiroz,Ana Salazar,telco_hogar,2026-08-05,"Agente: Telco Hogar, buenos días, le habla Mishell Quiroz.
+Cliente: Buenos días, quiero cancelar el servicio.
+Agente: Lamento escuchar eso. Para gestionarlo necesito validar su identidad, ¿me da su cédula?
+Cliente: 1302345614.
+Agente: Gracias, señora Salazar. Usted quiere dar de baja el internet de su domicilio, ¿es correcto?
+Cliente: Sí.
+Agente: ¿Me puede decir el motivo? Así dejo la constancia y veo si hay algo que pueda hacer.
+Cliente: Me mudo de ciudad y allá no tienen cobertura.
+Agente: Entiendo, en ese caso no hay mucho que ofrecerle. Registro la baja por cambio de domicilio sin cobertura. Su plan de $19,90 se factura hasta el 31/08/2026 y después ya no se le cobra nada. El retiro del equipo lo coordina logística por llamada al 0991234567 en los próximos cinco días hábiles.
+Cliente: Ya me habían dicho eso la vez pasada y nadie vino.
+Agente: Lo lamento. Dejo la nota en el caso para que se priorice, aunque la fecha exacta la pone logística, no yo. ¿Le puedo ayudar en algo más?
+Cliente: No, gracias.
+Agente: Gracias por su tiempo, señora Salazar. Buen día.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,cancelacion,no,1302345614|0991234567,"$19,90|31/08/2026",Baja gestionada con retención correcta; riesgo bajo por el cliente insatisfecho.
+INT-006,Andrés Villamar,Patricia Cueva,banca_tarjetas,2026-08-05,"Agente: Banco del Litoral, buenas, le atiende Andrés Villamar.
+Cliente: Hola, quiero diferir una compra que hice.
+Agente: Con gusto. ¿Me confirma su cédula, por favor?
+Cliente: 0506781236.
+Agente: Gracias, señora Cueva. Entonces quiere pasar a cuotas un consumo que ya está registrado en su tarjeta, ¿verdad?
+Cliente: Sí, el de la lavadora.
+Agente: ¿Me indica el valor y la fecha del consumo?
+Cliente: $89,99 y fue el lunes.
+Agente: Lo veo, en la tarjeta terminada en 0099. Puedo diferirlo a 3 cuotas sin intereses, que es lo que permite la promoción vigente hasta el 12/08/2026. A más cuotas ya entra interés y eso lo tendría que aceptar usted por la banca en línea.
+Cliente: Tres cuotas está bien.
+Agente: Listo, queda diferido. ¿Algo más en que le pueda servir?
+Cliente: No, muchas gracias.
+Agente: A usted. Buenas tardes.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,facturacion,no,0506781236,"$89,99|3 cuotas|12/08/2026","Diferido de consumo, todo dentro de política."
+INT-007,Rosa Delgado,Carlos Mendoza,telco_movil,2026-08-06,"Agente: Telco Móvil, buenos días, le habla Rosa Delgado.
+Cliente: Buenos días, me llegó la factura más alta de lo normal.
+Agente: A ver, deme el número de línea y le reviso... listo, ya lo tengo aquí.
+Cliente: ¿Qué es lo que salió?
+Agente: Entonces lo que usted me dice, señor Mendoza, es que su factura vino por encima de lo habitual y quiere saber por qué, ¿cierto?
+Cliente: Sí.
+Agente: ¿Recuerda si hizo llamadas internacionales o si viajó el mes pasado?
+Cliente: Sí, estuve en Colombia unos días.
+Agente: Ahí está. Su plan es de $25,00 y la factura vino en $31,40 por roaming de datos en Colombia. Le leo los consumos: tres conexiones el día doce, dos el trece... Le mando el detalle a carlos.mendoza@correo.com.
+Cliente: Ya entiendo.
+Agente: Le puedo activar el bloqueo de roaming para que no se repita, sin costo. ¿Se lo dejo activo?
+Cliente: Sí, por favor.
+Agente: Queda activado desde ya. ¿Algo más?
+Cliente: No, gracias.
+Agente: Gracias a usted, que tenga buen día.",cumple,no,cumple,cumple,cumple,cumple,cumple,cumple,3,facturacion,no,carlos.mendoza@correo.com,"$31,40|$25,00",Falla el ítem crítico: da el detalle de consumos sin pedir verificación.
+INT-008,Kevin Morales,Diego Paredes,telco_hogar,2026-08-06,"Agente: ¿Aló? Dígame.
+Cliente: Buenas, tengo el internet caído desde anoche.
+Agente: Para revisarlo le pido la cédula del titular.
+Cliente: 2403456789.
+Agente: Gracias, señor Paredes. O sea que el servicio está totalmente caído desde anoche, no intermitente, ¿correcto?
+Cliente: Sí, no da nada.
+Agente: ¿Qué luces tiene encendidas el módem en este momento?
+Cliente: Solo la de encendido, las demás apagadas.
+Agente: Eso apunta a un corte en la zona. Efectivamente veo una avería reportada en su sector. El plan de $22,50 se le acredita el día proporcional del corte una vez que cierre la avería. El tiempo estimado de reposición es de 24 horas y le avisan al fijo 042987654 cuando esté resuelto.
+Cliente: Está bien.
+Agente: ¿Necesita algo más?
+Cliente: No.
+Agente: Listo, gracias por reportar. Hasta luego.",no,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,servicio_tecnico,no,2403456789|042987654,"$22,50|24 horas",No saluda ni se identifica; lo demás correcto.
+INT-009,Jhoanna Pérez,Gabriela Ríos,seguros_salud,2026-08-07,"Agente: Seguros Andinos, buenas tardes, le habla Jhoanna Pérez.
+Cliente: Buenas, hace un mes pedí un reembolso y todavía nada.
+Agente: ¿Me confirma su cédula para ubicar el trámite?
+Cliente: 1102233440.
+Agente: Gracias, señora Ríos. ¿Recuerda el número de solicitud o la fecha en que la ingresó?
+Cliente: La ingresé el nueve de julio, por $210,00.
+Agente: La veo aquí. Está en estado de revisión médica; el plazo del reembolso es de 20 días hábiles y se cumplieron dieciocho, así que todavía está en plazo.
+Cliente: Me dijeron que eran quince días.
+Agente: En su póliza consta veinte. Le escalo el caso a reembolsos con nota de urgencia, pero la fecha de pago la define esa área. Le dejo el registro y le confirman por correo a gabriela.rios@correo.com o al 0987654321.
+Cliente: Bueno, espero que sea pronto.
+Agente: ¿Le puedo ayudar en algo más?
+Cliente: No, gracias.
+Agente: Que tenga buena tarde, gracias por llamar.",cumple,cumple,no,cumple,cumple,cumple,cumple,cumple,1,reclamo,no,1102233440|gabriela.rios@correo.com|0987654321,"$210,00|20 días hábiles",No parafrasea el problema; el resto se cumple.
+INT-010,Byron Cedeño,Fernando Ortiz,banca_tarjetas,2026-08-07,"Agente: Banco del Litoral, buenos días, le atiende Byron Cedeño.
+Cliente: Buenos días, me cobraron una comisión que no entiendo.
+Agente: ¿Me confirma su cédula?
+Cliente: 0605544337.
+Agente: Gracias, señor Ortiz. Entonces usted ve un cobro por comisión que no le cuadra, ¿correcto?
+Cliente: Eso mismo.
+Agente: Le explico: es la comisión por avance de efectivo, son $60,00 sobre el avance que hizo. Le abro el reclamo de una vez y el área de tarifas revisa si aplica devolución.
+Cliente: Pero yo no hice ningún avance.
+Agente: De todos modos el reclamo ya queda abierto; el área de tarifas responde en diez días hábiles y le llega la respuesta por la banca en línea. Su cupo de $1.800,00 no se ve afectado mientras tanto.
+Cliente: Ya.
+Agente: ¿Algo más en lo que le pueda ayudar?
+Cliente: No.
+Agente: Gracias por llamar, buen día.",cumple,cumple,cumple,no,cumple,cumple,cumple,cumple,1,facturacion,no,0605544337,"$60,00|$1.800,00",Salta el diagnóstico: propone la solución sin preguntar nada.
+INT-011,Mishell Quiroz,Sofía Naranjo,telco_hogar,2026-08-10,"Agente: Telco Hogar, buenos días, le habla Mishell Quiroz.
+Cliente: Buenos días, el internet anda lentísimo.
+Agente: ¿Me confirma su cédula, por favor?
+Cliente: 2001122338.
+Agente: Gracias, señora Naranjo. Entonces la velocidad le está bajando respecto a lo que contrató, ¿es así?
+Cliente: Sí, no puedo ni ver videos.
+Agente: ¿Ha medido la velocidad? ¿Le pasa con cable o solo por wifi?
+Cliente: Por wifi sobre todo, y medí como dos megas. Y pago $19,90 por veinte.
+Agente: Puede ser el módem, que ya es viejito, o saturación en la zona. Habría que revisarlo.
+Cliente: ¿Y qué hago entonces?
+Agente: Le recomiendo que vuelva a llamar en un par de días a ver si mejora, o si quiere acérquese a una agencia.
+Cliente: ¿No me pueden mandar un técnico?
+Agente: Es que eso lo ve otra área. Llame de nuevo y le ayudan.
+Cliente: Bueno...
+Agente: ¿Necesita alguna otra cosa?
+Cliente: No.
+Agente: Gracias por llamar a Telco Hogar, hasta luego.",cumple,cumple,cumple,cumple,no,cumple,cumple,cumple,2,servicio_tecnico,no,2001122338,"$19,90",Termina sin solución ni plazo ni área: falla solucion_o_derivacion.
+INT-012,Andrés Villamar,Ricardo Espín,telco_movil,2026-08-10,"Agente: Telco Móvil, buenas tardes, le habla Andrés Villamar.
+Cliente: Buenas, quería saber cuánto cuesta el paquete de datos adicional.
+Agente: ¿Me confirma su cédula para ver qué paquetes le aplican?
+Cliente: 1700011222.
+Agente: Gracias, señor Espín. Entonces quiere saber el precio de un paquete extra de datos para su línea, ¿verdad?
+Cliente: Sí.
+Agente: ¿Lo necesita para este ciclo o de forma recurrente?
+Cliente: Solo para este mes.
+Agente: Para su plan, el paquete puntual de 1 GB está en $15,00 y dura hasta el fin de su ciclo. Se activa por la aplicación o se lo puedo activar yo ahora, pero se cobra en la siguiente factura.
+Cliente: Déjeme pensarlo.
+Agente: Perfecto, cualquier cosa lo activa desde la aplicación o llamando al 0991234567.
+Cliente: Listo.
+Agente: Ya está.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,no,0,informacion,no,1700011222|0991234567,"$15,00|1 GB",Corta sin preguntar si necesita algo más ni despedirse.
+INT-013,Rosa Delgado,Elena Bravo,seguros_salud,2026-08-11,"Agente: Seguros Andinos, buenos días, le habla Rosa Delgado.
+Cliente: Buenos días, me negaron una autorización y no entiendo por qué.
+Agente: ¿Cédula, por favor?
+Cliente: 1712345675.
+Agente: Gracias, señora Bravo. Entonces le rechazaron una autorización y quiere saber el motivo, ¿correcto?
+Cliente: Sí, es que el doctor dijo que...
+Agente: Señora, déjeme hablar. ¿Usted presentó los exámenes completos?
+Cliente: Yo entregué lo que me pidieron en...
+Agente: No, si los hubiera entregado no se lo negaban. Ese es el problema, la gente entrega la mitad de los papeles y después reclama.
+Cliente: Yo entregué todo lo que me dieron en el hospital.
+Agente: Bueno, aquí dice que falta el informe del especialista. El valor de $530,00 queda pendiente hasta que lo suba. Le abro el caso y el área médica revisa en 72 horas desde que llegue el documento; le avisan a elena.bravo@correo.com.
+Cliente: Está bien.
+Agente: ¿Algo más?
+Cliente: No.
+Agente: Buen día.",cumple,cumple,cumple,cumple,cumple,no,cumple,cumple,3,reclamo,no,1712345675|elena.bravo@correo.com,"$530,00|72 horas",Falla el ítem crítico de tono: culpa e interrumpe a la clienta.
+INT-014,Kevin Morales,Pablo Herrera,banca_tarjetas,2026-08-11,"Agente: Banco del Litoral, buenas tardes, le atiende Kevin Morales.
+Cliente: Buenas, me duplicaron un pago en el supermercado.
+Agente: Lamento el inconveniente. ¿Me confirma su cédula?
+Cliente: 0923456784.
+Agente: Gracias, señor Herrera. Entonces el mismo consumo aparece dos veces en su estado de cuenta, ¿verdad?
+Cliente: Sí, dos veces $420,00.
+Agente: ¿Le entregaron dos comprobantes o solo uno?
+Cliente: Solo uno, el cajero dijo que el primero no pasó.
+Agente: Clásico. Le abro el reclamo por duplicidad. El área de reclamos tiene 15 días hábiles para analizarlo.
+Cliente: ¿Y me van a devolver el dinero?
+Agente: Sí, tranquilo, le garantizo que se lo devuelven completo, eso siempre se resuelve a favor del cliente. Se lo acreditan en la próxima facturación, yo se lo aseguro.
+Cliente: Menos mal.
+Agente: Le llega el número de caso a pablo.herrera@correo.com. ¿Le ayudo en algo más?
+Cliente: No, gracias.
+Agente: A la orden, buenas tardes.",cumple,cumple,cumple,cumple,cumple,cumple,no,cumple,3,facturacion,no,0923456784|pablo.herrera@correo.com,"$420,00|15 días hábiles",Falla compromiso_realista: garantiza la devolución que él mismo dice que decide otra área.
+INT-015,Jhoanna Pérez,Marcela Vega,telco_hogar,2026-08-12,"Agente: Dígame.
+Cliente: Hola, se me cayó la señal de la televisión.
+Agente: Cédula del titular.
+Cliente: 0109876540.
+Agente: ¿Desde cuándo no tiene señal, señora Vega?
+Cliente: Desde ayer en la tarde.
+Agente: ¿Todos los canales o solo algunos?
+Cliente: Todos, sale pantalla negra.
+Agente: ¿Probó desconectando el decodificador un minuto?
+Cliente: Sí, igual.
+Agente: Entonces es tema del decodificador. Le agendo cambio de equipo. El técnico va en 72 horas y le llama antes al 072456789. Su plan de $24,90 se ajusta por los días sin servicio.
+Cliente: Ya.
+Agente: Listo, queda agendado.",no,cumple,no,cumple,cumple,cumple,cumple,no,2,servicio_tecnico,no,0109876540|072456789,"$24,90|72 horas","Sin saludo, sin parafrasear y sin cierre; el fondo técnico está bien."
+INT-016,Byron Cedeño,Andrea Molina,telco_movil,2026-08-12,"Agente: Telco Móvil, buenos días, le habla Byron Cedeño.
+Cliente: Buenos días, quiero dar de baja una línea adicional.
+Agente: Claro. ¿Me confirma la cédula del titular?
+Cliente: 1804567897.
+Agente: Gracias, señora Molina. Usted quiere retirar una de las líneas de su cuenta y mantener las demás, ¿es correcto?
+Cliente: Sí, la de mi hijo que ya no la usa.
+Agente: ¿Me confirma los últimos cuatro dígitos de esa línea?
+Cliente: Termina en 4321.
+Agente: La ubico. La línea no tiene equipo financiado ni permanencia pendiente, así que la baja se puede aplicar sin penalidad. Se le factura hasta el 30/08/2026 y desde septiembre su cargo baja a $18,00.
+Cliente: Perfecto.
+Agente: Queda registrada la baja y le llega la constancia a andrea.molina@correo.com. ¿Algo más?
+Cliente: No, eso es todo.
+Agente: Gracias por llamar a Telco Móvil, buen día.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,cancelacion,no,1804567897|andrea.molina@correo.com,"$18,00|30/08/2026","Baja de línea adicional, correcta."
+INT-017,Mishell Quiroz,Iván Cabrera,seguros_salud,2026-08-13,"Agente: Seguros Andinos, buenas tardes, le habla Mishell Quiroz.
+Cliente: Buenas, quiero incluir a mi esposa en la póliza.
+Agente: Con gusto. ¿Me confirma su cédula, por favor?
+Cliente: 1302345614.
+Agente: Gracias, señor Cabrera. Entonces desea agregar a su cónyuge como dependiente en su póliza actual, ¿es así?
+Cliente: Exacto.
+Agente: ¿Ella tiene alguna condición preexistente declarada o tratamiento en curso?
+Cliente: No, ninguna.
+Agente: Perfecto. La inclusión sube su prima a $78,00 mensuales y rige desde el 01/09/2026, con los períodos de carencia habituales del plan. Necesito la copia de la cédula de ella y el acta de matrimonio; me las puede enviar a ivan.cabrera@correo.com respondiendo el correo que le envío ahora.
+Cliente: Listo, hoy mismo las mando.
+Agente: Perfecto. Apenas lleguen, suscripción confirma en cinco días hábiles y le avisamos al 0991234567. ¿Algo más?
+Cliente: No, gracias.
+Agente: Que tenga buena tarde.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,activacion,no,1302345614|0991234567|ivan.cabrera@correo.com,"$78,00|01/09/2026","Alta de dependiente, todo correcto."
+INT-018,Andrés Villamar,Nataly Guerrero,telco_hogar,2026-08-13,"Agente: Telco Hogar, buenos días, le habla Andrés Villamar.
+Cliente: Buenos días, me llegaron dos facturas este mes.
+Agente: Reviso enseguida. ¿Me confirma su cédula?
+Cliente: 0506781236.
+Agente: Gracias, señora Guerrero. Entonces usted recibió dos documentos de cobro en el mismo mes y quiere saber si es un error, ¿correcto?
+Cliente: Sí, eso.
+Agente: ¿Los dos vienen por el mismo valor o son distintos?
+Cliente: Uno de $19,90 y otro de $39,80.
+Agente: Ya veo lo que pasó. En julio hubo un cambio de fecha de facturación, entonces le emitieron el ciclo parcial y el ciclo completo juntos. No es un cobro doble del mismo periodo, son dos periodos distintos. Desde el 05/09/2026 le vuelve a llegar una sola factura de $19,90.
+Cliente: Ah, ya entiendo.
+Agente: Le envío el desglose a nataly.guerrero@correo.com para que lo revise con calma. ¿Le puedo ayudar en algo más?
+Cliente: No, quedó claro.
+Agente: Gracias por llamar, que tenga buen día.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,facturacion,no,0506781236|nataly.guerrero@correo.com,"$19,90|$39,80|05/09/2026",Explica un doble cobro correcto sin prometer de más.
+INT-019,Rosa Delgado,Esteban Mora,banca_tarjetas,2026-08-14,"Agente: Banco del Litoral, buenas, le atiende Rosa Delgado.
+Cliente: Buenas, llamé tres veces y nadie me resuelve lo del cobro.
+Agente: A ver, deme el número de tarjeta y le reviso.
+Cliente: 5178456734120099.
+Agente: Ya lo veo aquí, señor Mora, el cobro de $95,00.
+Cliente: Es que nadie me explica de dónde sale.
+Agente: Entonces lo que usted quiere es que le expliquen el origen de ese valor, ¿correcto?
+Cliente: Sí, es lo que pido desde hace un mes.
+Agente: ¿Y usted revisó su contrato? Porque ahí está.
+Cliente: Nadie me dio un contrato.
+Agente: Siempre dicen lo mismo. Mire, si no leyó lo que firmó no es problema del banco.
+Cliente: Oiga, no me hable así.
+Agente: Le estoy explicando. Es el seguro de protección de tarjeta, sale $95,00 al año. Si lo quiere quitar, se lo puedo cancelar ahora y el cobro no se repite el próximo año; la devolución de este año la decide el área de tarifas en diez días hábiles.
+Cliente: Cancélelo entonces.
+Agente: Hecho. ¿Algo más?
+Cliente: No.
+Agente: Buenas tardes.",cumple,no,cumple,cumple,cumple,no,cumple,cumple,3,reclamo,no,5178456734120099,"$95,00",Dos ítems críticos fallidos: sin verificación y con maltrato.
+INT-020,Kevin Morales,Lorena Paz,telco_movil,2026-08-14,"Agente: Telco Móvil, buenos días, le habla Kevin Morales.
+Cliente: Buenos días, no me llegan los mensajes de mi banco.
+Agente: Lo reviso. ¿Me confirma su cédula?
+Cliente: 0605544337.
+Agente: Gracias, señora Paz. Entonces sí recibe mensajes normales pero no le llegan los del banco, ¿es así?
+Cliente: Exactamente, los de mis amigos sí llegan.
+Agente: ¿Cambió de equipo o de chip hace poco?
+Cliente: Cambié el chip la semana pasada.
+Agente: Ahí está el detalle. Al reponer el chip se desactiva el servicio de mensajes de entidades. Se lo vuelvo a activar ahora, no tiene costo; su plan de $12,00 no cambia. Tarda hasta 24 horas en propagarse.
+Cliente: Perfecto.
+Agente: Si mañana no le llega, vuelva a llamarnos al 0991234567 y lo escalamos. ¿Le ayudo en algo más?
+Cliente: No, gracias.
+Agente: Gracias a usted, buen día.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,servicio_tecnico,no,0605544337|0991234567,"$12,00|24 horas","Problema de mensajes, resuelto en línea."
+INT-021,Jhoanna Pérez,Wilson Tapia,telco_hogar,2026-08-17,"Agente: Telco Hogar, buenas tardes, le habla Jhoanna Pérez.
+Cliente: Buenas, llevo cuatro días sin internet.
+Agente: Qué molestia, lo reviso. ¿Me confirma su cédula?
+Cliente: 2403456789.
+Agente: Gracias, señor Tapia. Entonces son cuatro días completos sin servicio, ¿correcto?
+Cliente: Sí, desde el jueves.
+Agente: ¿Le reportaron alguna avería en la zona o ya vino un técnico?
+Cliente: Vino uno el viernes y dijo que había que cambiar el cable.
+Agente: Ya veo la nota. Mire, yo le mando el técnico mañana sin falta, se lo prometo, mañana a primera hora está en su casa.
+Cliente: ¿Seguro? Eso me dijeron la vez pasada.
+Agente: Sí, yo me encargo personalmente. Y le devuelvo los $19,90 del mes completo.
+Cliente: Ojalá.
+Agente: Cualquier cosa me escribe a wilson.tapia@correo.com. ¿Algo más?
+Cliente: No.
+Agente: Buenas tardes.",cumple,cumple,cumple,cumple,no,cumple,no,cumple,3,servicio_tecnico,no,2403456789|wilson.tapia@correo.com,"$19,90|mañana",Promete una visita que no puede agendar y no deja plazo ni área reales.
+INT-022,Byron Cedeño,Cristina Aguirre,seguros_salud,2026-08-17,"Agente: Seguros Andinos, buenos días, le habla Byron Cedeño.
+Cliente: Buenos días, quiero saber qué clínicas están en la red.
+Agente: Claro. ¿Me confirma su cédula para ver su plan?
+Cliente: 2001122338.
+Agente: Gracias, señora Aguirre. Entonces necesita el listado de prestadores en convenio de su plan, ¿verdad?
+Cliente: Sí, para una consulta con un cardiólogo.
+Agente: ¿En qué ciudad la necesita?
+Cliente: En Quito.
+Agente: En Quito su plan tiene convenio con cuatro clínicas y la consulta con especialista en red le sale en $0,00 con su carnet, sin copago. Le envío el listado actualizado a cristina.aguirre@correo.com hoy mismo.
+Cliente: Perfecto.
+Agente: Si necesita agendar, la línea médica es 022345678 y le confirman el turno en 48 horas. ¿Algo más en lo que pueda ayudarle?
+Cliente: No, muchas gracias.
+Agente: A usted. Que tenga buen día.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,informacion,no,2001122338|022345678|cristina.aguirre@correo.com,"$0,00|48 horas","Consulta de red de prestadores, bien atendida."
+INT-023,Mishell Quiroz,Héctor Loor,banca_tarjetas,2026-08-18,"Agente: Banco del Litoral, buenas tardes, le atiende Mishell Quiroz.
+Cliente: Buenas, quiero cancelar mi tarjeta.
+Agente: Lo ayudo con eso. ¿Me confirma su cédula?
+Cliente: 1700011222.
+Agente: Gracias, señor Loor. Entonces quiere cerrar definitivamente la tarjeta terminada en 9017, ¿es correcto?
+Cliente: Sí.
+Agente: ¿Me comenta el motivo? Es solo para el registro.
+Cliente: Ya no la uso y no quiero pagar mantenimiento.
+Agente: Entiendo. Le comento que su tarjeta hoy tiene costo de mantenimiento en $0,00 por su antigüedad, por si eso cambia su decisión.
+Cliente: Ah, no sabía. Igual prefiero cerrarla.
+Agente: Perfecto, respeto su decisión. Registro el cierre. El saldo debe quedar en cero y la cuenta se cierra formalmente en 45 días, que es el plazo de liquidación; hasta entonces puede llegar algún consumo diferido.
+Cliente: Ya entiendo.
+Agente: Le llega la constancia a hector.loor@correo.com. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buenas tardes, señor Loor.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,cancelacion,no,1700011222|hector.loor@correo.com,"$0,00|45 días",Cancelación de tarjeta con retención honesta.
+INT-024,Andrés Villamar,Silvia Cornejo,telco_movil,2026-08-18,"Agente: Telco Móvil, buenos días, le habla Andrés Villamar.
+Cliente: Buenos días, tengo la factura atrasada y me cortaron la línea.
+Agente: Vemos qué se puede hacer. ¿Me confirma su cédula?
+Cliente: 0909988776.
+Agente: Gracias, señora Cornejo. Entonces su línea está suspendida por falta de pago y quiere reactivarla, ¿correcto?
+Cliente: Sí, pero ahora no puedo pagar todo.
+Agente: ¿Cuánto podría abonar hoy?
+Cliente: La mitad, unos catorce dólares.
+Agente: Con un abono del cincuenta por ciento puedo pedir la reactivación. La deuda total es de $28,00; con el abono de hoy la línea se reactiva y el saldo queda con fecha máxima 20/08/2026. Eso sí, si no entra el saldo en esa fecha, el sistema vuelve a suspender y eso ya no depende de mí.
+Cliente: Entendido, hoy mismo pago la mitad.
+Agente: Perfecto. Apenas se refleje el pago, la reactivación tarda hasta dos horas y le llega el aviso al 0987654321. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buen día, señora Cornejo.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,facturacion,no,0909988776|0987654321,"$28,00|20/08/2026",Convenio de pago dentro de política.
+INT-025,Rosa Delgado,Mateo Salinas,telco_hogar,2026-08-19,"Agente: Telco Hogar, buenas tardes, le habla Rosa Delgado.
+Cliente: Buenas, quiero contratar internet para mi casa nueva.
+Agente: Con mucho gusto. ¿Me confirma su cédula para iniciar el registro?
+Cliente: 0923456784.
+Agente: Gracias, señor Salinas. Entonces necesita una instalación nueva en un domicilio donde todavía no tiene servicio, ¿es así?
+Cliente: Correcto.
+Agente: ¿Me da la dirección para validar cobertura? ¿Y cuántas personas se conectarían?
+Cliente: Es en el norte, sector La Kennedy, y somos cuatro.
+Agente: Hay cobertura de fibra en esa zona. Para cuatro personas le recomiendo el plan de $29,90 con cien megas. La instalación se agenda en 7 días hábiles y no tiene costo si firma permanencia de un año; sin permanencia sí hay cargo de instalación.
+Cliente: Con permanencia está bien.
+Agente: Perfecto. Le envío el contrato a mateo.salinas@correo.com y la coordinación de la visita le llega al 0991234567. ¿Le ayudo en algo más?
+Cliente: No, eso es todo.
+Agente: Gracias por elegirnos, que tenga buena tarde.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,activacion,no,0923456784|mateo.salinas@correo.com|0991234567,"$29,90|7 días hábiles","Contratación nueva, completa."
+INT-026,Kevin Morales,Julia Reinoso,seguros_salud,2026-08-19,"Agente: Seguros Andinos, buenos días, le habla Kevin Morales.
+Cliente: Buenos días, me llegó un cobro del hospital que se supone cubría el seguro.
+Agente: Lo lamento, lo reviso. ¿Me confirma su cédula?
+Cliente: 0109876540.
+Agente: Gracias, señora Reinoso. Entonces el hospital le está cobrando directamente un valor que usted pensaba que iba por el seguro, ¿verdad?
+Cliente: Sí, $1.100,00.
+Agente: ¿La atención fue por emergencia o programada?
+Cliente: Por emergencia, el catorce de julio.
+Agente: Veo la atención registrada pero no veo la liquidación del hospital todavía. Puede ser que aún no la hayan enviado.
+Cliente: ¿Y qué hago?
+Agente: Habría que esperar a que ellos manden el documento.
+Cliente: ¿Pero alguien de ustedes lo revisa?
+Agente: Sí, alguien lo revisa cuando llegue. Yo le dejo la nota en el caso.
+Cliente: Está bien, ojalá.
+Agente: Cualquier novedad le escribimos a julia.reinoso@correo.com. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buen día, señora Reinoso.",cumple,cumple,cumple,cumple,no,cumple,cumple,cumple,2,reclamo,no,0109876540|julia.reinoso@correo.com,"$1.100,00","Escucha y trata bien, pero deja el caso sin área ni plazo."
+INT-027,Jhoanna Pérez,Óscar Benítez,banca_tarjetas,2026-08-20,"Agente: ¿Sí?
+Cliente: Buenas, tengo un problema grave con mi tarjeta.
+Agente: Dígame rápido que tengo cola.
+Cliente: Me clonaron la tarjeta, hay consumos de $780,00 que no hice.
+Agente: ¿Y usted le dio la tarjeta a alguien?
+Cliente: No, a nadie.
+Agente: Seguro la dejó por ahí. Bueno, ¿número de tarjeta?
+Cliente: 4532012345678902.
+Agente: Ya, señor Benítez. Mire, eso no lo devuelven nunca, así que ni se ilusione. De una vez le digo que lo va a tener que pagar usted.
+Cliente: ¿Cómo que lo voy a tener que pagar? Quiero poner el reclamo.
+Agente: Puede ponerlo pero es perder el tiempo.
+Cliente: Quiero hablar con un supervisor.
+Agente: No hay supervisores ahorita. Llame después.
+Cliente: Pero...
+Agente: Tengo que colgar.",no,no,no,no,no,no,no,no,3,reclamo,no,4532012345678902,"$780,00","Peor caso: falla todo, incluidos los tres críticos."
+INT-028,Byron Cedeño,Karina Suárez,telco_movil,2026-08-20,"Agente: Telco Móvil, buenas tardes, le habla Byron Cedeño.
+Cliente: Buenas, me porté hace dos días y no puedo hacer llamadas.
+Agente: Lo reviso enseguida. ¿Me confirma su cédula?
+Cliente: 1302345614.
+Agente: Gracias, señora Suárez. Entonces la portabilidad ya se completó pero su línea no cursa llamadas salientes, ¿es correcto?
+Cliente: Sí, recibo mensajes pero no puedo llamar.
+Agente: ¿Le sale algún mensaje de error o simplemente no timbra?
+Cliente: Dice ""llamada no permitida"".
+Agente: Eso suele ser el perfil de la línea que no terminó de migrar. Le genero el caso al área de aprovisionamiento; el plazo de solución es de 48 horas y su plan de $22,00 no se factura por los días sin servicio saliente.
+Cliente: Ya, gracias.
+Agente: Le confirman por correo a karina.suarez@correo.com cuando esté resuelto. ¿Algo más en que le pueda ayudar?
+Cliente: No, eso es todo.
+Agente: Gracias por su paciencia, buena tarde.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,servicio_tecnico,no,1302345614|karina.suarez@correo.com,"$22,00|48 horas","Portabilidad con problema técnico, bien manejada."
+INT-029,Mishell Quiroz,Álvaro Jiménez,telco_hogar,2026-08-21,"Agente: Telco Hogar, buenos días, le habla Mishell Quiroz.
+Cliente: Buenos días, quería saber si tienen un plan más rápido que el mío.
+Agente: Con gusto. ¿Me confirma su cédula para ver qué tiene contratado?
+Cliente: 0506781236.
+Agente: Gracias, señor Jiménez. Entonces quiere comparar su plan actual con opciones de mayor velocidad, ¿correcto?
+Cliente: Sí, trabajo desde casa y a veces se me traba la videollamada.
+Agente: ¿Se le traba en horas específicas o a cualquier hora?
+Cliente: Sobre todo en la tarde.
+Agente: Eso suele ser hora pico. El plan superior es de 200 megas por $34,90 al mes; le daría más holgura, aunque si la traba viene del wifi y no del enlace, subir el plan no lo resuelve del todo. Se lo digo para que decida con la información completa.
+Cliente: Déjeme pensarlo, gracias por la honestidad.
+Agente: A la orden. Si decide, llame o acérquese, y si quiere primero revisamos el wifi al 072456789. ¿Le puedo ayudar en algo más?
+Cliente: No, gracias.
+Agente: Buen día, señor Jiménez.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,informacion,no,0506781236|072456789,"$34,90|200 megas","Consulta comercial, sin gestión de cuenta."
+INT-030,Andrés Villamar,Daniela Robles,banca_tarjetas,2026-08-21,"Agente: Banco del Litoral, buenos días, le atiende Andrés Villamar.
+Cliente: Buenos días, quiero pedir aumento de cupo.
+Agente: Claro. ¿Me confirma su cédula?
+Cliente: 1102233440.
+Agente: Gracias, señora Robles. Entonces solicita una ampliación del cupo de su tarjeta actual, ¿verdad?
+Cliente: Sí, quiero llegar a $3.000,00.
+Agente: ¿El aumento es para un gasto puntual o para uso permanente?
+Cliente: Para un viaje en diciembre.
+Agente: Entiendo. Registro la solicitud; la evaluación la hace riesgo crediticio y toma hasta 30 días. No le puedo anticipar si se aprueba ni por cuánto, porque depende de su comportamiento de pago y de su capacidad, que los revisa esa área.
+Cliente: Está bien, entiendo.
+Agente: Si no alcanza el cupo permanente, existe la opción de un cupo temporal de viaje, que se pide más cerca de la fecha. Le dejo la nota en su perfil.
+Cliente: Perfecto.
+Agente: La respuesta le llega a daniela.robles@correo.com. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buen día, señora Robles.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,informacion,no,1102233440|daniela.robles@correo.com,"$3.000,00|30 días",Consulta de aumento de cupo con expectativa bien manejada.
+INT-031,Rosa Delgado,Freddy Coello,seguros_salud,2026-08-24,"Agente: Seguros Andinos, buenas tardes, le habla Rosa Delgado.
+Cliente: Buenas, llamo por la póliza de mi hermano, quiero saber qué tiene cubierto.
+Agente: A ver, deme el nombre de él.
+Cliente: Freddy Coello.
+Agente: Lo encuentro. Entonces usted quiere conocer las coberturas de la póliza de su hermano, ¿correcto?
+Cliente: Sí, es que él está internado y no puede llamar.
+Agente: ¿Sabe si el internamiento fue por emergencia?
+Cliente: Sí, entró el sábado.
+Agente: Le leo lo que tiene: hospitalización cubierta al ochenta por ciento, deducible de $260,00, y tiene una exclusión declarada por una condición previa. El caso lo lleva el área médica y ellos autorizan por tramos.
+Cliente: Ah, ya. ¿Y esa exclusión cuál es?
+Agente: Está registrada como condición cardiovascular previa.
+Cliente: Entendido, gracias.
+Agente: Le envío el resumen a freddy.coello@correo.com. ¿Algo más?
+Cliente: No, gracias.
+Agente: Que esté bien, buenas tardes.",cumple,no,cumple,cumple,cumple,cumple,cumple,cumple,3,informacion,no,freddy.coello@correo.com,"$260,00",Da datos de la póliza de un tercero sin verificar identidad: crítico.
+INT-032,Kevin Morales,Mónica Salgado,telco_hogar,2026-08-24,"Agente: Telco Hogar, buenas tardes, le habla Kevin Morales.
+Cliente: Buenas, es la quinta vez que llamo por lo mismo.
+Agente: ¿Me confirma su cédula?
+Cliente: 2001122338.
+Agente: Gracias, señora Salgado. Entonces su reclamo por el servicio sigue sin resolverse después de cinco llamadas, ¿es así?
+Cliente: Sí, y estoy cansada.
+Agente: ¿Le dieron algún número de caso en las llamadas anteriores?
+Cliente: Me dieron tres números distintos.
+Agente: Señora, si me deja hablar le explico... no, es que usted no me deja terminar. Así no avanzamos.
+Cliente: Es que llevo un mes.
+Agente: Ya lo sé, pero gritando no se arregla. Mire, para que quedemos en paz le doy $100,00 de compensación en su próxima factura, olvídese del problema.
+Cliente: ¿Cien dólares?
+Agente: Sí, yo se lo autorizo. Y el técnico va esta semana.
+Cliente: Bueno.
+Agente: Le avisan al 0991234567. ¿Algo más?
+Cliente: No.
+Agente: Buenas tardes.",cumple,cumple,cumple,cumple,cumple,no,no,cumple,3,reclamo,no,2001122338|0991234567,"$100,00",Pierde la paciencia y además ofrece una compensación que no puede dar.
+INT-033,Jhoanna Pérez,Renato Villacís,telco_movil,2026-08-25,"Agente: Telco Móvil, buenos días, le habla Jhoanna Pérez.
+Cliente: Buenos días, me están cobrando una cuota de un equipo que devolví.
+Agente: Lo reviso. ¿Me confirma su cédula?
+Cliente: 1700011222.
+Agente: Gracias, señor Villacís. Entonces usted devolvió el equipo y aun así le siguen cobrando la cuota mensual, ¿correcto?
+Cliente: Sí, $44,00 este mes otra vez.
+Agente: ¿Conserva el comprobante de la devolución? ¿En qué agencia la hizo?
+Cliente: Sí, lo tengo, fue en la agencia del centro el treinta de julio.
+Agente: Perfecto, ese comprobante es lo que necesita el área de facturación. Le abro el reclamo con el detalle; el plazo de respuesta es de 10 días hábiles. Si procede, le reversan los valores cobrados; si no procede, le explican por qué. No le puedo adelantar el resultado.
+Cliente: Entiendo, ¿le mando el comprobante?
+Agente: Sí, respóndame al correo que le llega ahora a renato.villacis@correo.com. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buen día, señor Villacís.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,facturacion,no,1700011222|renato.villacis@correo.com,"$44,00|10 días hábiles","Reclamo de cobro por equipo, bien gestionado."
+INT-034,Byron Cedeño,Tatiana Yépez,banca_tarjetas,2026-08-25,"Agente: Banco del Litoral, buenas tardes, le atiende Byron Cedeño.
+Cliente: Buenas, no puedo entrar a la banca en línea.
+Agente: Lo ayudo. ¿Me confirma su cédula?
+Cliente: 0909988776.
+Agente: Gracias, señora Yépez. Entonces su usuario no le permite ingresar a la banca en línea, ¿es así?
+Cliente: Sí, me dice usuario bloqueado.
+Agente: ¿Recuerda cuántas veces intentó con la clave antes de que se bloqueara?
+Cliente: Como cuatro o cinco.
+Agente: Eso fue. Tras tres intentos fallidos el sistema bloquea por seguridad. Le genero el desbloqueo ahora, no tiene costo, $0,00, y le llega una clave temporal al 0987654321. Debe cambiarla al primer ingreso.
+Cliente: Perfecto.
+Agente: El desbloqueo se refleja en máximo 2 horas. Si no le llega la clave, escríbanos desde tatiana.yepez@correo.com. ¿Le ayudo en algo más?
+Cliente: No, gracias.
+Agente: A la orden, buenas tardes.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,0,servicio_tecnico,no,0909988776|tatiana.yepez@correo.com|0987654321,"$0,00|2 horas","Problema de acceso a la banca en línea, resuelto."
+INT-035,Mishell Quiroz,Jaime Ponce,telco_hogar,2026-08-26,"Agente: Telco Hogar Empresas, buenas tardes.
+Cliente: Buenas, tengo el servicio del local caído.
+Agente: Enseguida. ¿Me confirma el RUC de la empresa?
+Cliente: 1712345675001.
+Agente: Gracias, señor Ponce. Entonces el enlace del local comercial está sin servicio, ¿correcto?
+Cliente: Sí, desde las once de la mañana.
+Agente: ¿El respaldo móvil tampoco levanta?
+Cliente: No, tampoco.
+Agente: Le genero el caso con prioridad empresarial. La orden de trabajo es la 1712345670 y el plazo para enlaces corporativos es de 48 horas, aunque normalmente van el mismo día. Su plan de $54,90 se ajusta por indisponibilidad según el acuerdo de nivel de servicio.
+Cliente: Perfecto.
+Agente: Le confirmo por jaime.ponce@correo.com. Cualquier cosa me pregunta por ahí, le habla Mishell Quiroz.
+Cliente: Gracias.
+Agente: A usted.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,servicio_tecnico,si,1712345675001|jaime.ponce@correo.com,"$54,90|1712345670|48 horas",AMBIGUO: el saludo no dice el nombre del agente hasta el final y el cierre es escueto.
+INT-036,Andrés Villamar,Rocío Mantilla,seguros_salud,2026-08-26,"Agente: Seguros Andinos, buenos días, le habla Andrés Villamar.
+Cliente: Buenos días, me subió la prima y no me avisaron.
+Agente: Lo reviso. ¿Me da su número de póliza?
+Cliente: 1009876543.
+Agente: Gracias, señora Mantilla. Entonces usted vio un incremento en el valor de su prima sin haber recibido aviso previo, ¿es correcto?
+Cliente: Exacto, pasó de noventa y algo a más de cien.
+Agente: ¿Cumplió años de póliza este mes o cambió de rango de edad?
+Cliente: Sí, cumplí cuarenta en julio.
+Agente: Ahí está el motivo. El ajuste por rango etario es automático en la renovación: su prima pasó a $96,00 mensuales, que anualizado da $1.009,00. El aviso se envía por correo treinta días antes; le voy a revisar si salió.
+Cliente: No me llegó nada.
+Agente: Puede que haya ido a spam. De todas formas dejo la queja registrada por falta de notificación y pido que revisen el envío; la respuesta la da el área comercial, no le puedo prometer que se revierta el ajuste.
+Cliente: Ya veo.
+Agente: Le confirmo a rocio.mantilla@correo.com. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buen día.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,facturacion,si,rocio.mantilla@correo.com,"$96,00|$1.009,00|1009876543",AMBIGUO: verifica con un dato débil (solo el número de póliza) y el compromiso queda en el límite.
+INT-037,Rosa Delgado,Xavier Alcívar,telco_movil,2026-08-27,"Agente: Telco Móvil, buenas tardes, le habla Rosa Delgado.
+Cliente: Ustedes son unos ladrones, me están robando todos los meses.
+Agente: Entiendo que esté molesto. ¿Me confirma su cédula para revisar qué pasó?
+Cliente: 0109876540. Y no me venga con excusas.
+Agente: Entonces usted, señor Alcívar, ve cobros que considera indebidos de forma repetida, ¿correcto?
+Cliente: Sí, todos los meses lo mismo.
+Agente: ¿Me indica qué valor específico le aparece de más?
+Cliente: Siempre son como siete dólares extra.
+Agente: Le pido algo: si me habla sin insultar, le puedo revisar caso por caso y lo resolvemos. Si seguimos así no voy a poder ayudarle.
+Cliente: Ya, está bien, revise.
+Agente: Gracias. Veo que su plan es de $37,00 y tiene un servicio de contenido activo que suma esos valores. Lo puedo desactivar ahora y pedir la reversa de los últimos tres meses con el número de caso 0923456780; la reversa la aprueba facturación en diez días hábiles.
+Cliente: Hágalo.
+Agente: Desactivado. Le confirmo a xavier.alcivar@correo.com. ¿Algo más?
+Cliente: No, gracias, disculpe.
+Agente: Sin problema, buenas tardes.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,reclamo,si,0109876540|xavier.alcivar@correo.com,"$37,00|0923456780",AMBIGUO: el agente se pone firme pero sin faltar el respeto; el tono está en el límite.
+INT-038,Kevin Morales,Belén Ruiz,telco_hogar,2026-08-27,"Agente: Telco Hogar, buenos días, le habla Kevin Morales.
+Cliente: Buenos días, me llamaron de una encuesta diciendo que eran ustedes y me pidieron mis datos.
+Agente: Gracias por avisar. ¿Me confirma su cédula para verificar su cuenta?
+Cliente: 1804567897.
+Agente: Gracias, señora Ruiz. Entonces recibió una llamada de alguien que dijo ser de la empresa y le pidió información personal, ¿es correcto?
+Cliente: Sí, me pidieron la clave de la banca en línea también.
+Agente: ¿Usted llegó a dar algún dato?
+Cliente: No, me pareció raro y colgué.
+Agente: Hizo muy bien. Nosotros nunca pedimos claves por teléfono. Su plan de $19,90 y su cuenta están normales, no veo ningún cambio. Registro el intento de suplantación y lo reporto a seguridad de la información; ellos no se comunican con el cliente, pero el registro sirve para el bloqueo de esos números.
+Cliente: Ah, qué bueno.
+Agente: Si vuelve a pasar, llame al 022345678 y lo reportamos de nuevo. Le mando la constancia a belen.ruiz@correo.com. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buen día, señora Ruiz.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,otro,si,1804567897|belen.ruiz@correo.com|022345678,"$19,90","AMBIGUO: el motivo no encaja en ninguna categoría, es una encuesta; debería salir 'otro'."
+INT-039,Jhoanna Pérez,Germán Arteaga,banca_tarjetas,2026-08-28,"Agente: Banco del Litoral, buenas tardes, le atiende Jhoanna Pérez.
+Cliente: Buenas, pagué mi tarjeta y el pago no aparece.
+Agente: Lo reviso. ¿Me confirma su cédula?
+Cliente: 1302345614.
+Agente: Gracias, señor Arteaga. Entonces realizó un pago que todavía no se refleja en su estado de cuenta, ¿verdad?
+Cliente: Sí, $150,00 el martes.
+Agente: ¿Lo hizo por otra entidad o en ventanilla nuestra?
+Cliente: Por otro banco, por transferencia.
+Agente: Los pagos interbancarios pueden demorar. Veo que no ha ingresado. Lo derivo a conciliación de pagos con el comprobante; ellos revisan y, si el pago se ubica, lo aplican con la fecha original. El plazo estándar es de 15 días hábiles, aunque si el otro banco responde antes se resuelve antes; no le puedo dar una fecha exacta.
+Cliente: ¿Y mientras tanto me cobran mora?
+Agente: Si se confirma que el pago entró en fecha, la mora se reversa. Si no se ubica, se mantiene. Depende del resultado.
+Cliente: Entendido.
+Agente: Le llega el número de caso a german.arteaga@correo.com. Por seguridad, la tarjeta 4532012345678901 que me dictó no coincide con ninguna suya; use la que termina en 0099. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buenas tardes.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,2,facturacion,si,1302345614|german.arteaga@correo.com,"$150,00|15 días hábiles|4532012345678901",AMBIGUO: la derivación tiene área pero el plazo es condicional; solucion_o_derivacion está al límite.
+INT-040,Byron Cedeño,Lucía Terán,seguros_salud,2026-08-28,"Agente: Seguros Andinos, buenos días, le habla Byron Cedeño.
+Cliente: Buenos días, quiero cancelar la póliza de mi empresa.
+Agente: Entiendo. ¿Me confirma el RUC para ubicar la póliza?
+Cliente: 0506781236001.
+Agente: Gracias, señora Terán. Entonces desea dar de baja la póliza colectiva de la empresa, ¿es correcto?
+Cliente: Sí, ya no podemos pagarla.
+Agente: ¿El tema es el valor o la cobertura?
+Cliente: El valor, $120,00 por persona es mucho ahora.
+Agente: Le propongo algo antes de cancelar: hay un plan colectivo más básico que baja bastante la prima por persona, con menos cobertura ambulatoria pero manteniendo hospitalización. ¿Le interesa que le pase la propuesta?
+Cliente: Es que ya decidimos cancelar.
+Agente: Lo respeto. Solo le pido que la vea, porque una vez cancelada la reactivación exige nuevos períodos de carencia y eso a veces pesa. Si igual quiere cancelar, la baja rige al 31/12/2026, que es el fin de vigencia, y el trámite formal toma 30 días desde la carta firmada.
+Cliente: Mándeme la propuesta y le confirmo.
+Agente: Perfecto, se la envío hoy a lucia.teran@correo.com y le llamo el lunes al 0991234567 para su respuesta. ¿Algo más?
+Cliente: No, gracias.
+Agente: Buen día.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,cancelacion,si,0506781236001|lucia.teran@correo.com|0991234567,"$120,00|31/12/2026|30 días",AMBIGUO: retención insistente pero respetuosa; el tono y el cierre están en el límite.

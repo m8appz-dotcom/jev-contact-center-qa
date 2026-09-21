@@ -1,0 +1,80 @@
+{
+  "_fuente": "https://docs.typesafe.ai/api (consultada el 2026-09-21). Los tres objetos de 'documentacion' están copiados literalmente de los ejemplos de respuesta de la referencia de la API; 'completa' es una respuesta con la forma que devuelve esa misma API para la rúbrica rubrics/soporte_es.json.",
+  "documentacion": {
+    "noul": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "is_urgent": {
+          "type": "noul",
+          "noul": 0.95
+        }
+      },
+      "usage": { "input_tokens": 307, "output_tokens": 20 }
+    },
+    "choice": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "department": {
+          "type": "choice",
+          "choice": "billing",
+          "probabilities": { "billing": 0.88, "technical": 0.12, "sales": 0.0 },
+          "confidence": 0.81
+        }
+      },
+      "usage": { "input_tokens": 318, "output_tokens": 34 }
+    },
+    "score": {
+      "model": "jev-1.13.0",
+      "answers": {
+        "frustration": {
+          "type": "score",
+          "score": 1.05,
+          "legend": { "0": "Calm", "1": "Frustrated", "2": "Very angry" },
+          "probabilities": { "0": 0.0, "1": 0.95, "2": 0.05 },
+          "confidence": 0.92
+        }
+      },
+      "usage": { "input_tokens": 304, "output_tokens": 18 }
+    }
+  },
+  "completa": {
+    "model": "jev-1.13.0",
+    "answers": {
+      "saludo": { "type": "noul", "noul": 0.97 },
+      "verifica_identidad": { "type": "noul", "noul": 0.91 },
+      "escucha_activa": { "type": "noul", "noul": 0.48 },
+      "diagnostico": { "type": "noul", "noul": 0.88 },
+      "solucion_o_derivacion": { "type": "noul", "noul": 0.12 },
+      "tono_respetuoso": { "type": "noul", "noul": 0.99 },
+      "compromiso_realista": { "type": "noul", "noul": 0.73 },
+      "cierre": { "type": "noul", "noul": 0.06 },
+      "riesgo": {
+        "type": "score",
+        "score": 2.13,
+        "legend": {
+          "0": "Ninguno: el cliente queda atendido y la conversación no deja nada pendiente ni expone a la empresa.",
+          "1": "Bajo: hay fallas de forma en la atención, pero el cliente queda atendido y no anuncia ninguna acción en contra.",
+          "2": "Medio: el cliente queda sin solución o insatisfecho y es previsible que vuelva a llamar o presente un reclamo.",
+          "3": "Alto: hay maltrato al cliente, una promesa fuera de política, o datos personales tratados sin verificación, y el caso puede terminar en un reclamo formal o en una sanción."
+        },
+        "probabilities": { "0": 0.01, "1": 0.13, "2": 0.58, "3": 0.28 },
+        "confidence": 0.44
+      },
+      "motivo": {
+        "type": "choice",
+        "choice": "facturacion",
+        "probabilities": {
+          "facturacion": 0.79,
+          "servicio_tecnico": 0.04,
+          "activacion": 0.01,
+          "cancelacion": 0.03,
+          "reclamo": 0.11,
+          "informacion": 0.02,
+          "otro": 0.0
+        },
+        "confidence": 0.75
+      }
+    },
+    "usage": { "input_tokens": 1642, "output_tokens": 96 }
+  }
+}

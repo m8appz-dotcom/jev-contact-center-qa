@@ -1,5 +1,5 @@
 # Auditoría QA de contact centers con Jev (MVP) — plan
-Estado: fase activa = 1. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
+Estado: fase activa = 2 (requiere aprobación). Fase 1 cerrada el 2026-09-21. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
 Stack: Python 3.14, solo biblioteca estándar (urllib, csv, unittest, html). Sin dependencias nuevas sin aprobación.
 Flujo: CSV de transcripciones -> anonimizar -> 1 petición Jev por interacción -> nota y cola de revisión -> CSV + informe.
 Fuera de alcance: transcripción de audio, dashboard web, multiusuario, deploy, datos reales de clientes.
@@ -37,7 +37,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: el cuerpo de la petición contiene el texto una sola vez y exactamente N+2 preguntas; la respuesta de ejemplo de la documentación se interpreta sin pérdida de campos.
 - Verificación: `python -m unittest discover -s tests -v` → 0 fallos.
 - Riesgo: el formato real de la API difiere del documentado → el test usa una respuesta copiada de la documentación y la fase 2 lo confirma en vivo.
-- [ ] cerrada
+- [x] cerrada
 
 ## Fase 2 — ¿Funciona Jev en español? (REQUIERE APROBACIÓN: credenciales y gasto < $0,01)
 - Objetivo: medir, por ítem de la rúbrica, cuánto coincide Jev con las etiquetas humanas en español antes de construir nada más.

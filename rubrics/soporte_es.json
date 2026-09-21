@@ -1,0 +1,110 @@
+{
+  "id": "soporte_es",
+  "nombre": "Soporte telefónico en español (Ecuador)",
+  "version": "1.0",
+  "idioma": "es",
+  "descripcion": "Rúbrica de auditoría de calidad para interacciones de soporte de un contact center. Los pesos suman 100. Los ítems críticos, si no se cumplen, hacen fallar la interacción completa (ver fase 5).",
+  "items": [
+    {
+      "id": "saludo",
+      "pregunta": "¿El agente saluda al inicio de la conversación diciendo el nombre de la empresa y su propio nombre?",
+      "criterios": {
+        "true": "En su primera intervención el agente dice el nombre de la empresa y su propio nombre.",
+        "false": "No hay saludo, o falta el nombre de la empresa, o falta el nombre del agente."
+      },
+      "peso": 5,
+      "critico": false
+    },
+    {
+      "id": "verifica_identidad",
+      "pregunta": "¿El agente pide al cliente al menos un dato de verificación de identidad (cédula, número de contrato o correo registrado) antes de dar o de cambiar información de la cuenta?",
+      "criterios": {
+        "true": "El agente pide un dato de verificación antes de tratar información de la cuenta, o la conversación nunca llega a tratar información de la cuenta.",
+        "false": "El agente da saldos, datos personales, consumos o hace cambios en la cuenta sin haber pedido ningún dato de verificación."
+      },
+      "peso": 10,
+      "critico": true
+    },
+    {
+      "id": "escucha_activa",
+      "pregunta": "¿El agente repite con sus propias palabras el problema del cliente para confirmar que lo entendió?",
+      "criterios": {
+        "true": "El agente resume o parafrasea el problema y pide confirmación al cliente.",
+        "false": "El agente pasa directamente a preguntar o a resolver sin devolver el problema en sus propias palabras."
+      },
+      "peso": 10,
+      "critico": false
+    },
+    {
+      "id": "diagnostico",
+      "pregunta": "¿El agente hace al menos una pregunta concreta sobre el problema antes de proponer una solución?",
+      "criterios": {
+        "true": "El agente pregunta por síntomas, fechas, equipos, valores o pasos ya intentados antes de proponer la solución.",
+        "false": "El agente propone una solución sin haber preguntado nada específico sobre el problema."
+      },
+      "peso": 15,
+      "critico": false
+    },
+    {
+      "id": "solucion_o_derivacion",
+      "pregunta": "¿La conversación termina con una solución aplicada o con una derivación que dice a qué área pasa el caso y en qué plazo?",
+      "criterios": {
+        "true": "El agente resuelve el caso en la llamada, o lo deriva indicando el área y el plazo de respuesta.",
+        "false": "La conversación termina sin solución y sin un plazo o un área concretos."
+      },
+      "peso": 20,
+      "critico": false
+    },
+    {
+      "id": "tono_respetuoso",
+      "pregunta": "¿El agente trata al cliente con respeto durante toda la conversación?",
+      "criterios": {
+        "true": "El agente usa fórmulas de cortesía, deja hablar al cliente y mantiene la calma incluso si el cliente se altera.",
+        "false": "El agente levanta la voz, interrumpe de forma sistemática, descalifica al cliente, lo culpa o corta la llamada."
+      },
+      "peso": 15,
+      "critico": true
+    },
+    {
+      "id": "compromiso_realista",
+      "pregunta": "¿Todo lo que el agente promete (precios, plazos, reintegros o resultados) está dentro de lo que su área le permite ofrecer?",
+      "criterios": {
+        "true": "El agente solo promete lo que puede cumplir, y cuando no está seguro lo dice y lo deja sujeto a revisión.",
+        "false": "El agente garantiza un reintegro, un precio, un descuento o un plazo que no depende de él o que contradice la política que él mismo menciona."
+      },
+      "peso": 15,
+      "critico": true
+    },
+    {
+      "id": "cierre",
+      "pregunta": "¿El agente cierra la conversación preguntando si el cliente necesita algo más y despidiéndose?",
+      "criterios": {
+        "true": "El agente pregunta si hay algo más en lo que pueda ayudar y se despide.",
+        "false": "La conversación termina sin esa pregunta o sin despedida."
+      },
+      "peso": 10,
+      "critico": false
+    }
+  ],
+  "riesgo": {
+    "pregunta": "¿Qué nivel de riesgo para la empresa deja esta conversación?",
+    "niveles": [
+      "Ninguno: el cliente queda atendido y la conversación no deja nada pendiente ni expone a la empresa.",
+      "Bajo: hay fallas de forma en la atención, pero el cliente queda atendido y no anuncia ninguna acción en contra.",
+      "Medio: el cliente queda sin solución o insatisfecho y es previsible que vuelva a llamar o presente un reclamo.",
+      "Alto: hay maltrato al cliente, una promesa fuera de política, o datos personales tratados sin verificación, y el caso puede terminar en un reclamo formal o en una sanción."
+    ]
+  },
+  "motivo": {
+    "pregunta": "¿Cuál es el motivo principal por el que el cliente contacta?",
+    "opciones": {
+      "facturacion": "Cobros, facturas, valores duplicados, reintegros y formas de pago.",
+      "servicio_tecnico": "El servicio no funciona o funciona mal: cortes, lentitud, fallas del equipo.",
+      "activacion": "Altas, contrataciones, instalaciones y cambios de plan hacia arriba.",
+      "cancelacion": "Bajas, retiros del servicio y cambios de plan hacia abajo.",
+      "reclamo": "Queja por la atención recibida o por un incumplimiento previo de la empresa.",
+      "informacion": "Consulta de información sin una gestión asociada: horarios, cobertura, requisitos, precios.",
+      "otro": "Ninguna de las anteriores describe el motivo principal del contacto."
+    }
+  }
+}
