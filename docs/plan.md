@@ -1,6 +1,6 @@
 # Auditoría QA de contact centers con Jev (MVP) — plan
-Estado: fases 1 y 3 cerradas el 2026-09-21. La fase 2 queda abierta a la espera de
-TYPESAFE_API_KEY (su parte sin red ya está hecha). Fase activa = 4. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
+Estado: fases 1, 3 y 4 cerradas el 2026-09-21. La fase 2 queda abierta a la espera
+de TYPESAFE_API_KEY (su parte sin red ya está hecha). Fase activa = 5. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
 Stack: Python 3.14, solo biblioteca estándar (urllib, csv, unittest, html). Sin dependencias nuevas sin aprobación.
 Flujo: CSV de transcripciones -> anonimizar -> 1 petición Jev por interacción -> nota y cola de revisión -> CSV + informe.
 Fuera de alcance: transcripción de audio, dashboard web, multiusuario, deploy, datos reales de clientes.
@@ -84,7 +84,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: con `FakeJev`, 50 filas de entrada dan 50 filas de salida; al relanzar se hacen 0 llamadas; el cuerpo enviado no contiene datos personales sembrados.
 - Verificación: `python -m unittest tests.test_pipeline -v` → 0 fallos; `python -m jevqa auditar tests/fixtures/mini.csv --fake` → exit 0.
 - Riesgo: doble gasto al relanzar → cubierto por el test de reanudación.
-- [ ] cerrada
+- [x] cerrada
 
 ## Fase 5 — Nota, umbrales y cola de revisión
 - Objetivo: cada interacción tiene nota 0–100, las críticas fallan siempre y las dudosas van a revisión humana.
