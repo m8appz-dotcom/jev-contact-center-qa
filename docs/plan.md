@@ -14,15 +14,9 @@ gasto de dinero, credenciales, o si la fase revela que el plan está equivocado.
 Criterio de modelo: sonnet para implementación bien especificada; opus para privacidad y juicio fino;
 haiku solo para trabajo mecánico. Verificación común: `python -m unittest discover -s tests -v` → 0 fallos.
 
-## Medición A/B: esta máquina (optimizada) contra bobi-almax (Claude sin optimizar)
-- Fases espejo: 1, 3 y 4 se ejecutan en las dos máquinas desde el mismo commit; 2, 5, 6 y 7 solo aquí.
-- Antes de cada fase espejo: etiqueta `base-fN` en el commit de partida y push al remoto compartido.
-- bobi: clon limpio, `git checkout -b bobi/fN base-fN`, sesión nueva, prompt fijo: «Lee docs/plan.md y ejecuta solo la Fase N. Termina cuando pase su comando de verificación.» Sin tocar su configuración de Claude.
-- Aquí: sesión nueva, `/phase-runner` con la misma fase. La rama principal sigue con el código de aquí; `bobi/fN` solo se mide.
-- Calidad igualada: tests de aceptación ocultos en `C:/Users/kenny/projects/jev-qa-holdout/` (fuera del repo, ninguno de los dos los ve), escritos antes de la fase contra la «Interfaz fija»; se ejecutan sobre las dos ramas.
-- Registro por fase y lado en `docs/ab.md`: tokens (entrada, salida, lectura y escritura de caché), coste, modelos usados, `claude --version`, minutos, intervenciones humanas, verificación a la primera sí/no, tests ocultos pasados, líneas del diff.
-- Medir con `python claude-metrics.py sessions --project <ruta> --list --json --since <fecha>` en cada máquina (en bobi, copiando solo ese script).
-- Lectura: una sola ejecución por lado es una anécdota; diferencias menores del 25 % cuentan como empate. Para afirmar un ahorro, repetir la fase 1 dos veces por lado.
+## Medición A/B (la hace otra sesión; no es requisito para ejecutar ninguna fase)
+- Cada fase se ejecuta en una sesión nueva en esta máquina y en bobi-almax con el mismo mensaje. No hay remoto, etiquetas
+  obligatorias ni tests ocultos: no los busques ni los crees. Los resultados se registran en `docs/ab.md`.
 
 ## Fase 1 — Rúbrica, cliente Jev y conjunto de validación
 - Objetivo: a partir de una rúbrica JSON se construye una sola petición Jev por interacción y su respuesta se convierte en un resultado tipado, sin red.
