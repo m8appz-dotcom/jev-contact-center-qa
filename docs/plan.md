@@ -1,7 +1,7 @@
 # Auditoría QA de contact centers con Jev (MVP) — plan
-Estado: fases 1, 2, 3 y 4 cerradas el 2026-09-21. La fase 2 se ejecutó en vivo con
-aprobación del usuario: 8 de 8 ítems por encima del 85 % de acuerdo, coste real
-$0,0085. Fase activa = 5 (en curso: jevqa/scoring.py todavía sin escribir). Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
+Estado: fases 1, 2, 3 y 4 cerradas el 2026-09-21; fase 5 cerrada el 2026-09-22. La fase 2 se
+ejecutó en vivo con aprobación del usuario: 8 de 8 ítems por encima del 85 % de acuerdo, coste real
+$0,0085. Fase activa = 6. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
 Stack: Python 3.14, solo biblioteca estándar (urllib, csv, unittest, html). Sin dependencias nuevas sin aprobación.
 Flujo: CSV de transcripciones -> anonimizar -> 1 petición Jev por interacción -> nota y cola de revisión -> CSV + informe.
 Fuera de alcance: transcripción de audio, dashboard web, multiusuario, deploy, datos reales de clientes.
@@ -93,7 +93,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: los casos de cobertura dan la nota, el estado y la cola esperados.
 - Verificación: `python -m unittest tests.test_scoring -v` → 0 fallos.
 - Riesgo: umbrales mal puestos → configurables en la rúbrica, con valores por defecto sacados del informe de la fase 2.
-- [ ] cerrada
+- [x] cerrada
 
 ## Fase 6 — Informe semanal y kit del piloto
 - Objetivo: un HTML por campaña y una comparación contra 100 auditorías humanas, que es lo que se entrega en el piloto.
