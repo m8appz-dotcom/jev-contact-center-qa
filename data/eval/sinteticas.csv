@@ -517,11 +517,11 @@ Agente: ¿Me indica qué valor específico le aparece de más?
 Cliente: Siempre son como siete dólares extra.
 Agente: Le pido algo: si me habla sin insultar, le puedo revisar caso por caso y lo resolvemos. Si seguimos así no voy a poder ayudarle.
 Cliente: Ya, está bien, revise.
-Agente: Gracias. Veo que su plan es de $37,00 y tiene un servicio de contenido activo que suma esos valores. Lo puedo desactivar ahora y pedir la reversa de los últimos tres meses con el número de caso 0923456780; la reversa la aprueba facturación en diez días hábiles.
+Agente: Gracias. Veo que su plan es de $37,00 y tiene un servicio de contenido activo que suma esos valores. Lo puedo desactivar ahora y pedir la reversa de los últimos tres meses con el número de caso 1102233441; la reversa la aprueba facturación en diez días hábiles.
 Cliente: Hágalo.
 Agente: Desactivado. Le confirmo a xavier.alcivar@correo.com. ¿Algo más?
 Cliente: No, gracias, disculpe.
-Agente: Sin problema, buenas tardes.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,reclamo,si,0109876540|xavier.alcivar@correo.com,"$37,00|0923456780",AMBIGUO: el agente se pone firme pero sin faltar el respeto; el tono está en el límite.
+Agente: Sin problema, buenas tardes.",cumple,cumple,cumple,cumple,cumple,cumple,cumple,cumple,1,reclamo,si,0109876540|xavier.alcivar@correo.com,"$37,00|1102233441",AMBIGUO: el agente se pone firme pero sin faltar el respeto; el tono está en el límite.
 INT-038,Kevin Morales,Belén Ruiz,telco_hogar,2026-08-27,"Agente: Telco Hogar, buenos días, le habla Kevin Morales.
 Cliente: Buenos días, me llamaron de una encuesta diciendo que eran ustedes y me pidieron mis datos.
 Agente: Gracias por avisar. ¿Me confirma su cédula para verificar su cuenta?

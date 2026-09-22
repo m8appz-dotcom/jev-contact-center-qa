@@ -4,10 +4,14 @@ El paquete se ordena por capas: `rubric` no sabe nada de la red y `jev_client`
 no sabe nada de la rúbrica. El flujo de una interacción es siempre el mismo:
 
     rubrica = load_rubric("rubrics/soporte_es.json")
-    peticion = build_request(rubrica, texto_anonimizado)
+    peticion = build_request(rubrica, anonymize(texto, [agente, cliente_nombre]))
     resultado = parse_response(rubrica, cliente.evaluar(peticion))
+
+Anonimizar no es opcional ni es el último paso: nada sale hacia Jev sin pasar
+antes por `anonymize`.
 """
 
+from jevqa.anonymize import Mapa, anonimizar_con_mapa, anonymize
 from jevqa.jev_client import (
     ErrorAutenticacion,
     ErrorConexion,
@@ -40,10 +44,13 @@ __all__ = [
     "ErrorSolicitud",
     "FakeJev",
     "JevClient",
+    "Mapa",
     "ReintentosAgotados",
     "RespuestaIncompleta",
     "RespuestaInvalida",
     "RubricaInvalida",
+    "anonimizar_con_mapa",
+    "anonymize",
     "build_request",
     "coste_usd",
     "load_rubric",
