@@ -27,7 +27,7 @@ diferencias menores del 25 % cuentan como empate.
 
 | Campo | Aquí | bobi |
 | --- | --- | --- |
-| Commit de partida | `base-f3` (534cd6d^ = adc6a9f… ver nota) | — |
+| Commit de partida | `base-f3` (fcf00d7) | — |
 | Rama medida | `mvp-qa` (9b83b8e) | `bobi/f3` (pendiente) |
 | Modelo(s) usados | Opus 5 (el plan pedía opus) | — |
 | Verificación a la primera | sí (36 tests, 0 fallos en la primera ejecución) | — |
@@ -58,9 +58,15 @@ real porque es el único de todo el proyecto.
 | Resultado | 8 de 8 ítems por encima del 85 % de acuerdo |
 
 Las tres pasadas completas salieron de ir mejorando el informe, no de que
-fallara la medición: las respuestas de Jev fueron idénticas en las tres. Si
-se vuelve a tocar el informe, conviene guardar las respuestas crudas en vez
-de volver a pagar la pasada.
+fallara la medición. No dieron respuestas idénticas: los tokens de entrada
+sí coinciden (66.924 en las tres) y la tabla de acuerdo no se movió ni una
+décima, pero los noul varían un poco entre pasadas (INT-035 `saludo` dio
+0,09 y luego 0,07) y con ellos el recuento de respuestas por encima del
+umbral de confianza. Las conclusiones aguantan; un umbral afinado al
+segundo decimal, no.
+
+Si se vuelve a tocar el informe, conviene guardar las respuestas crudas en
+vez de volver a pagar la pasada.
 
 ### Qué falta para que la comparación sea válida
 
