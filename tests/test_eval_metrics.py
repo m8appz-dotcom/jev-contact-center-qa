@@ -144,6 +144,30 @@ class TestRecorridoCompleto(unittest.TestCase):
         with open(self.salida, encoding="utf-8") as archivo:
             self.assertIn("Interacciones que fallaron", archivo.read())
 
+    def test_se_envia_el_texto_anonimizado(self):
+        # Producción nunca manda texto crudo: medir sobre el crudo daría un
+        # acuerdo que el sistema real no puede alcanzar.
+        rubrica = eval_jev.load_rubric(eval_jev.RUBRICA)
+        filas = eval_jev.cargar_interacciones(eval_jev.DATOS, rubrica)[:1]
+        cliente = eval_jev.FakeJev()
+
+        eval_jev.evaluar(rubrica, filas, cliente)
+
+        enviado = cliente.llamadas[0]["state"]
+        for dato in filter(None, filas[0]["pii_sembrada"].split("|")):
+            with self.subTest(dato=dato):
+                self.assertNotIn(dato, enviado)
+        self.assertIn("[CEDULA]", enviado)
+
+    def test_sin_anonimizar_manda_el_texto_crudo(self):
+        rubrica = eval_jev.load_rubric(eval_jev.RUBRICA)
+        filas = eval_jev.cargar_interacciones(eval_jev.DATOS, rubrica)[:1]
+        cliente = eval_jev.FakeJev()
+
+        eval_jev.evaluar(rubrica, filas, cliente, anonimizar=False)
+
+        self.assertEqual(cliente.llamadas[0]["state"], filas[0]["texto"])
+
     def test_el_coste_sale_de_los_tokens_de_uso(self):
         evaluaciones = [
             {"resultado": {"uso": {"tokens_entrada": 1_000_000, "tokens_salida": 50}}},

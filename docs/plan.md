@@ -1,6 +1,7 @@
 # Auditoría QA de contact centers con Jev (MVP) — plan
-Estado: fases 1, 3 y 4 cerradas el 2026-09-21. La fase 2 queda abierta a la espera
-de TYPESAFE_API_KEY (su parte sin red ya está hecha). Fase activa = 5. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
+Estado: fases 1, 2, 3 y 4 cerradas el 2026-09-21. La fase 2 se ejecutó en vivo con
+aprobación del usuario: 8 de 8 ítems por encima del 85 % de acuerdo, coste real
+$0,0085. Fase activa = 5 (en curso: jevqa/scoring.py todavía sin escribir). Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
 Stack: Python 3.14, solo biblioteca estándar (urllib, csv, unittest, html). Sin dependencias nuevas sin aprobación.
 Flujo: CSV de transcripciones -> anonimizar -> 1 petición Jev por interacción -> nota y cola de revisión -> CSV + informe.
 Fuera de alcance: transcripción de audio, dashboard web, multiusuario, deploy, datos reales de clientes.
@@ -52,7 +53,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: existe `data/eval/informe.md` con las 40 filas evaluadas y métricas por ítem. PUNTO DE DECISIÓN: si algún ítem baja del 85 % de acuerdo, detente y reporta (opciones: reformular en inglés, traducir el texto antes de enviarlo, o quitar el ítem).
 - Verificación: `python scripts/eval_jev.py --fake` → informe con 40 filas; luego `python scripts/eval_jev.py` (en vivo).
 - Riesgo: datos sintéticos escritos por nosotros sobreestiman el acierto → límite conocido; la validación real es el piloto (fase 6).
-- [ ] cerrada
+- [x] cerrada
 
 ## Fase 3 — Anonimizador (ley de datos de Ecuador)
 - Objetivo: ningún dato personal identificable del cliente final sale hacia Jev.

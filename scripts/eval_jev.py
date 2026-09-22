@@ -23,6 +23,7 @@ from typing import Iterable
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from jevqa.anonymize import anonymize  # noqa: E402
 from jevqa.jev_client import ErrorJev, FakeJev, JevClient, coste_usd  # noqa: E402
 from jevqa.rubric import (  # noqa: E402
     ErrorRubrica,
@@ -42,6 +43,12 @@ UMBRAL = 0.5
 UMBRAL_CONFIANZA = 0.7
 #: Umbral de decisión del plan: por debajo, el ítem no sirve como está.
 ACUERDO_MINIMO = 0.85
+
+#: Exhaustividad por debajo de la cual el ítem se señala aparte. El acuerdo
+#: puede ser altísimo y la exhaustividad pésima cuando el "no cumple" es raro:
+#: un ítem que dice "cumple" siempre acierta el 95 % de las veces y no detecta
+#: ni una falla. Para una auditoría, eso es inservible.
+EXHAUSTIVIDAD_MINIMA = 0.5
 
 ETIQUETA_CUMPLE = "cumple"
 ETIQUETA_NO = "no"
@@ -130,6 +137,25 @@ def metricas_por_item(rubrica: dict, evaluaciones: list[dict], **opciones) -> di
     }
 
 
+def fallas_no_detectadas(
+    rubrica: dict, evaluaciones: list[dict], item_id: str, *, umbral: float = UMBRAL
+) -> list[tuple[str, float]]:
+    """Las fallas reales que Jev dejó pasar, con el noul que les dio.
+
+    El mayor de esos valores es el umbral que la fase 5 tendría que superar
+    para detectarlas todas; lo que cueste en falsos positivos se ve en la
+    columna de precisión.
+    """
+    perdidas = []
+    for ev in evaluaciones:
+        if ev["resultado"] is None or ev["etiquetas"].get(item_id) is not False:
+            continue
+        probabilidad = ev["resultado"]["items"][item_id]["probabilidad"]
+        if probabilidad >= umbral:
+            perdidas.append((ev["id"], probabilidad))
+    return sorted(perdidas, key=lambda par: par[1], reverse=True)
+
+
 def peores_desacuerdos(
     rubrica: dict, evaluaciones: list[dict], *, cuantos: int = 5, umbral: float = UMBRAL
 ) -> list[dict]:
@@ -154,7 +180,7 @@ def peores_desacuerdos(
                     "probabilidad": registro["probabilidad"],
                     "confianza": registro["confianza"],
                     "ambiguo": ev["fila"].get("ambiguo") == "si",
-                    "texto": ev["fila"].get("texto", ""),
+                    "texto": ev.get("texto_enviado") or ev["fila"].get("texto", ""),
                     "notas": ev["fila"].get("notas", ""),
                 }
             )
@@ -185,8 +211,16 @@ def cargar_interacciones(ruta: str, rubrica: dict) -> list[dict]:
     return filas
 
 
-def evaluar(rubrica: dict, filas: list[dict], cliente) -> list[dict]:
-    """Una petición por interacción. Un fallo se registra y el lote sigue."""
+def evaluar(
+    rubrica: dict, filas: list[dict], cliente, *, anonimizar: bool = True
+) -> list[dict]:
+    """Una petición por interacción. Un fallo se registra y el lote sigue.
+
+    Por defecto se mide sobre el texto anonimizado, que es exactamente lo que
+    la auditoría manda en producción. Medir sobre el texto crudo daría un
+    acuerdo más alto del que el sistema real puede alcanzar, porque ese texto
+    nunca sale de la máquina.
+    """
     evaluaciones = []
     for posicion, fila in enumerate(filas, start=1):
         etiquetas = {
@@ -201,8 +235,13 @@ def evaluar(rubrica: dict, filas: list[dict], cliente) -> list[dict]:
             "resultado": None,
             "error": None,
         }
+        texto = fila["texto"]
+        if anonimizar:
+            nombres = [fila.get("agente", ""), fila.get("cliente", "")]
+            texto = anonymize(texto, [nombre for nombre in nombres if nombre])
+        registro["texto_enviado"] = texto
         try:
-            respuesta = cliente.evaluar(build_request(rubrica, fila["texto"]))
+            respuesta = cliente.evaluar(build_request(rubrica, texto))
             registro["resultado"] = parse_response(rubrica, respuesta)
         except (ErrorJev, ErrorRubrica) as exc:
             registro["error"] = f"{type(exc).__name__}: {exc}"
@@ -253,6 +292,7 @@ def escribir_informe(
     modo: str,
     umbral: float,
     umbral_confianza: float,
+    anonimizado: bool = True,
 ) -> list[str]:
     """Escribe el informe y devuelve los ítems que no llegan al mínimo."""
     correctas = [ev for ev in evaluaciones if ev["resultado"] is not None]
@@ -272,6 +312,12 @@ def escribir_informe(
         f"- Rúbrica: `{rubrica['id']}` v{rubrica['version']} ({len(rubrica['items'])} ítems)",
         f"- Interacciones evaluadas: **{len(correctas)}** de {len(evaluaciones)}",
         f"- Umbral de cumplimiento: noul ≥ {umbral} · umbral de confianza: {umbral_confianza}",
+        f"- Texto enviado: **{'anonimizado' if anonimizado else 'crudo'}**"
+        + (
+            " (lo mismo que manda la auditoría en producción)"
+            if anonimizado
+            else " (no es lo que manda producción: sobreestima el acuerdo)"
+        ),
         f"- Tokens de entrada: {uso['tokens_entrada']:,} · de salida: {uso['tokens_salida']:,}",
         f"- Coste: ${uso['coste_usd']:.6f}",
         "",
@@ -324,6 +370,50 @@ def escribir_informe(
             f"Todos los ítems llegan al {ACUERDO_MINIMO:.0%} de acuerdo. Se puede seguir."
         )
 
+    flojos = [
+        (qid, m)
+        for qid, m in metricas.items()
+        if m["no_cumple_humano"]
+        and (m["exhaustividad_no_cumple"] or 0.0) < EXHAUSTIVIDAD_MINIMA
+    ]
+    criticos = {item["id"] for item in rubrica["items"] if item["critico"]}
+    lineas += ["", "### Cobertura del «no cumple»", ""]
+    if flojos:
+        lineas += [
+            "El acuerdo de arriba tapa esto: cuando la falla es rara, un ítem puede",
+            f"acertar el 95 % de las veces y no detectar casi ninguna. Por debajo del",
+            f"{EXHAUSTIVIDAD_MINIMA:.0%} de exhaustividad:",
+            "",
+        ]
+        for qid, m in flojos:
+            perdidas = fallas_no_detectadas(rubrica, evaluaciones, qid, umbral=umbral)
+            lineas.append(
+                f"- `{qid}`"
+                + (" **(crítico)**" if qid in criticos else "")
+                + f": detecta {m['aciertos_no_cumple']} de {m['no_cumple_humano']} "
+                + f"fallas reales ({_pct(m['exhaustividad_no_cumple'])})."
+            )
+            if perdidas:
+                detalle = ", ".join(f"{ident} con {valor:.2f}" for ident, valor in perdidas)
+                lineas.append(f"  Se le escaparon: {detalle}.")
+                lineas.append(
+                    f"  Subiendo su umbral de cumplimiento por encima de "
+                    f"{perdidas[0][1]:.2f} se detectarían todas."
+                )
+        if any(qid in criticos for qid, _ in flojos):
+            lineas += [
+                "",
+                "Un ítem crítico que no detecta las fallas es el peor caso para una",
+                "auditoría: la interacción pasa y nadie la revisa. Antes del piloto hay",
+                "que bajarle el umbral de cumplimiento a ese ítem, afinar sus criterios,",
+                "o mandarlo siempre a revisión humana.",
+            ]
+    else:
+        lineas.append(
+            f"Ningún ítem baja del {EXHAUSTIVIDAD_MINIMA:.0%} de exhaustividad sobre las "
+            "fallas reales."
+        )
+
     lineas += ["", "## Los 5 peores desacuerdos", ""]
     peores = peores_desacuerdos(rubrica, evaluaciones, umbral=umbral)
     if not peores:
@@ -358,6 +448,11 @@ def escribir_informe(
         "  exhaustividad se calcula sobre pocos casos y se mueve mucho.",
         "- El acuerdo depende del umbral de 0,5; un ítem puede mejorar solo con",
         "  moverlo. La fase 5 fija los umbrales definitivos a partir de aquí.",
+        "- Jev lee la pregunta al pie de la letra (ver la documentación de",
+        "  jaggedness de jev-1.13). Varios desacuerdos salen de ahí: el agente sí",
+        "  hizo *una* pregunta concreta o sí dio *un* plazo, aunque la llamada",
+        "  entera fuera mala. Si eso molesta, hay que escribirlo en el criterio,",
+        "  no esperar que el modelo lea la intención.",
         "",
     ]
 
@@ -379,6 +474,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--umbral", type=float, default=UMBRAL)
     parser.add_argument("--umbral-confianza", type=float, default=UMBRAL_CONFIANZA)
     parser.add_argument("--limite", type=int, default=0, help="evalúa solo las primeras N filas")
+    parser.add_argument(
+        "--sin-anonimizar",
+        action="store_true",
+        dest="sin_anonimizar",
+        help="manda el texto crudo; sirve para medir cuánto cuesta anonimizar",
+    )
     args = parser.parse_args(argv)
 
     rubrica = load_rubric(args.rubrica)
@@ -398,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     print(f"Evaluando {len(filas)} interacciones en modo {modo}...")
-    evaluaciones = evaluar(rubrica, filas, cliente)
+    evaluaciones = evaluar(rubrica, filas, cliente, anonimizar=not args.sin_anonimizar)
     metricas = metricas_por_item(
         rubrica,
         evaluaciones,
@@ -413,6 +514,7 @@ def main(argv: list[str] | None = None) -> int:
         modo=modo,
         umbral=args.umbral,
         umbral_confianza=args.umbral_confianza,
+        anonimizado=not args.sin_anonimizar,
     )
 
     uso = uso_total(evaluaciones)

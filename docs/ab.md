@@ -23,6 +23,45 @@ diferencias menores del 25 % cuentan como empate.
 | Tests ocultos pasados | no ejecutados (no existe el directorio holdout) | — |
 | Líneas del diff | 2.123 añadidas, 2 borradas (10 archivos, `base-f1..47789df`) | — |
 
+## Fase 3 — Anonimizador
+
+| Campo | Aquí | bobi |
+| --- | --- | --- |
+| Commit de partida | `base-f3` (534cd6d^ = adc6a9f… ver nota) | — |
+| Rama medida | `mvp-qa` (9b83b8e) | `bobi/f3` (pendiente) |
+| Modelo(s) usados | Opus 5 (el plan pedía opus) | — |
+| Verificación a la primera | sí (36 tests, 0 fallos en la primera ejecución) | — |
+| Intervenciones humanas | 0 | — |
+| Líneas del diff | 601 añadidas, 5 borradas (5 archivos) | — |
+
+## Fase 4 — Auditoría por lotes
+
+| Campo | Aquí | bobi |
+| --- | --- | --- |
+| Commit de partida | `base-f4` (9b83b8e) | — |
+| Rama medida | `mvp-qa` (534cd6d) | `bobi/f4` (pendiente) |
+| Modelo(s) usados | Opus 5 (el plan pedía sonnet) | — |
+| Verificación a la primera | no (1 fallo: el límite de campo de `csv`, que era un fallo real del código, no del test) | — |
+| Intervenciones humanas | 0 | — |
+| Líneas del diff | 899 añadidas, 3 borradas (5 archivos) | — |
+
+## Fase 2 — no es fase espejo
+
+No se mide: el plan solo compara las fases 1, 3 y 4. Se anota aquí el gasto
+real porque es el único de todo el proyecto.
+
+| Concepto | Valor |
+| --- | --- |
+| Llamadas a Jev | 121 (1 de prueba + 3 pasadas de 40) |
+| Tokens de entrada | 202.527 |
+| Coste | $0,0085 |
+| Resultado | 8 de 8 ítems por encima del 85 % de acuerdo |
+
+Las tres pasadas completas salieron de ir mejorando el informe, no de que
+fallara la medición: las respuestas de Jev fueron idénticas en las tres. Si
+se vuelve a tocar el informe, conviene guardar las respuestas crudas en vez
+de volver a pagar la pasada.
+
 ### Qué falta para que la comparación sea válida
 
 Tres piezas del protocolo no existen todavía en esta máquina y hay que

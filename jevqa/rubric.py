@@ -77,6 +77,7 @@ def load_rubric(path: str) -> dict:
         "items": _validar_items(crudo.get("items"), path),
         "riesgo": _validar_riesgo(crudo.get("riesgo"), path),
         "motivo": _validar_motivo(crudo.get("motivo"), path),
+        "umbrales": _validar_umbrales(crudo.get("umbrales"), path),
         "ruta": path,
     }
 
@@ -182,6 +183,25 @@ def _validar_motivo(valor: Any, contexto: str) -> dict:
         "pregunta": _texto(valor.get("pregunta"), "pregunta", contexto=donde),
         "opciones": dict(opciones),
     }
+
+
+def _validar_umbrales(valor: Any, contexto: str) -> dict:
+    """Umbrales de la fase 5. Se transportan tal cual; `scoring` pone los suyos.
+
+    Aquí solo se comprueba que sean números: qué significa cada uno y cuál es
+    su valor por defecto es cosa de `jevqa.scoring`, que es quien puntúa.
+    """
+    if valor is None:
+        return {}
+    donde = f"{contexto}: umbrales"
+    if not isinstance(valor, dict):
+        raise RubricaInvalida(f"{donde} debe ser un objeto")
+    umbrales = {}
+    for clave, numero in valor.items():
+        if isinstance(numero, bool) or not isinstance(numero, (int, float)):
+            raise RubricaInvalida(f"{donde}: {clave} debe ser un número")
+        umbrales[str(clave)] = float(numero)
+    return umbrales
 
 
 # ---------------------------------------------------------------------------
