@@ -7,9 +7,12 @@ import os
 import sys
 
 from jevqa import __version__
+from jevqa.compare import ErrorComparacion, comparar, escribir, resumen_consola
 from jevqa.jev_client import FakeJev, JevClient
 from jevqa.pipeline import ErrorEntrada, Limitador, auditar, imprimir_resumen
+from jevqa.report import ErrorResultados, generar_informes
 from jevqa.rubric import ErrorRubrica, load_rubric
+from jevqa.scoring import ErrorScoring
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUBRICA = os.path.join(RAIZ, "rubrics", "soporte_es.json")
@@ -54,6 +57,39 @@ def _comando_auditar(args) -> int:
     return 0
 
 
+def _comando_informe(args) -> int:
+    rubrica = load_rubric(args.rubrica)
+    carpeta = args.salida or CARPETA_SALIDAS
+    rutas = generar_informes(
+        args.resultados, carpeta, rubrica, desde=args.desde, hasta=args.hasta
+    )
+    if not rutas:
+        print("No hay interacciones en ese periodo: no se generó ningún informe.")
+        return 0
+    print(f"{len(rutas)} informe(s):")
+    for ruta in rutas:
+        print(f"  {ruta}")
+    return 0
+
+
+def _comando_comparar(args) -> int:
+    rubrica = load_rubric(args.rubrica)
+    resultado = comparar(args.humano, args.resultados, rubrica)
+    print(resumen_consola(resultado))
+    ruta = escribir(resultado, args.salida or os.path.join(CARPETA_SALIDAS, "comparacion.md"))
+    print()
+    print(f"Comparación completa: {ruta}")
+    return 0
+
+
+def _argumento_fake_sin_efecto(parser: argparse.ArgumentParser) -> None:
+    # Este comando no llama a Jev. Se acepta --fake para que cualquier comando
+    # del README se pueda correr igual en una prueba sin red.
+    parser.add_argument(
+        "--fake", action="store_true", help="sin efecto: este comando no llama a Jev"
+    )
+
+
 def construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m jevqa",
@@ -85,6 +121,39 @@ def construir_parser() -> argparse.ArgumentParser:
     )
     auditar_cmd.set_defaults(funcion=_comando_auditar)
 
+    informe_cmd = comandos.add_parser(
+        "informe",
+        help="genera un informe HTML por campaña a partir de los resultados",
+        description=(
+            "Califica cada interacción del CSV de resultados y escribe un HTML por "
+            "campaña con el ranking de agentes, las peores interacciones, la cola de "
+            "revisión y el coste de Jev del periodo."
+        ),
+    )
+    informe_cmd.add_argument("resultados", help="CSV que deja `auditar`")
+    informe_cmd.add_argument("--salida", help="carpeta de los informes (por defecto, salidas/)")
+    informe_cmd.add_argument("--rubrica", default=RUBRICA)
+    informe_cmd.add_argument("--desde", help="primera fecha del periodo, AAAA-MM-DD")
+    informe_cmd.add_argument("--hasta", help="última fecha del periodo, AAAA-MM-DD")
+    _argumento_fake_sin_efecto(informe_cmd)
+    informe_cmd.set_defaults(funcion=_comando_informe)
+
+    comparar_cmd = comandos.add_parser(
+        "comparar",
+        help="compara la auditoría de Jev con una auditoría humana",
+        description=(
+            "Acuerdo y kappa de Cohen por ítem, más la matriz de confusión, entre un "
+            "CSV auditado a mano (id y una columna por ítem con cumple/no) y los "
+            "resultados de `auditar`."
+        ),
+    )
+    comparar_cmd.add_argument("humano", help="CSV auditado a mano")
+    comparar_cmd.add_argument("resultados", help="CSV que deja `auditar`")
+    comparar_cmd.add_argument("--salida", help="archivo Markdown (por defecto, salidas/comparacion.md)")
+    comparar_cmd.add_argument("--rubrica", default=RUBRICA)
+    _argumento_fake_sin_efecto(comparar_cmd)
+    comparar_cmd.set_defaults(funcion=_comando_comparar)
+
     return parser
 
 
@@ -96,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     try:
         return args.funcion(args)
-    except (ErrorEntrada, ErrorRubrica) as exc:
+    except (ErrorEntrada, ErrorRubrica, ErrorResultados, ErrorComparacion, ErrorScoring) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

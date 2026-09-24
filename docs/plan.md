@@ -1,7 +1,7 @@
 # Auditoría QA de contact centers con Jev (MVP) — plan
-Estado: fases 1, 2, 3 y 4 cerradas el 2026-09-21; fase 5 cerrada el 2026-09-22. La fase 2 se
+Estado: fases 1, 2, 3 y 4 cerradas el 2026-09-21; fase 5 cerrada el 2026-09-22; fase 6 cerrada el 2026-09-24. La fase 2 se
 ejecutó en vivo con aprobación del usuario: 8 de 8 ítems por encima del 85 % de acuerdo, coste real
-$0,0085. Fase activa = 6. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
+$0,0085. Fase activa = 7. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
 Stack: Python 3.14, solo biblioteca estándar (urllib, csv, unittest, html). Sin dependencias nuevas sin aprobación.
 Flujo: CSV de transcripciones -> anonimizar -> 1 petición Jev por interacción -> nota y cola de revisión -> CSV + informe.
 Fuera de alcance: transcripción de audio, dashboard web, multiusuario, deploy, datos reales de clientes.
@@ -106,7 +106,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: con los datos de ejemplo se generan los dos archivos con todas sus secciones y la comparación da el kappa esperado en los casos de test.
 - Verificación: `python -m unittest tests.test_report tests.test_compare -v` → 0 fallos.
 - Riesgo: HTML con texto del cliente sin escapar → test de que se escapa `<script>`.
-- [ ] cerrada
+- [x] cerrada
 
 ## Fase 7 — README de operación
 - Objetivo: alguien que no ha visto el código puede correr un piloto siguiendo el README.
