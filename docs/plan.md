@@ -1,7 +1,6 @@
 # Auditoría QA de contact centers con Jev (MVP) — plan
-Estado: fases 1, 2, 3 y 4 cerradas el 2026-09-21; fase 5 cerrada el 2026-09-22; fase 6 cerrada el 2026-09-24. La fase 2 se
-ejecutó en vivo con aprobación del usuario: 8 de 8 ítems por encima del 85 % de acuerdo, coste real
-$0,0085. Fase activa = 7. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
+Estado: plan cerrado el 2026-09-24, fases 1 a 7. La fase 2 se ejecutó en vivo con aprobación
+del usuario: 8 de 8 ítems por encima del 85 % de acuerdo, coste real $0,0085. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
 Stack: Python 3.14, solo biblioteca estándar (urllib, csv, unittest, html). Sin dependencias nuevas sin aprobación.
 Flujo: CSV de transcripciones -> anonimizar -> 1 petición Jev por interacción -> nota y cola de revisión -> CSV + informe.
 Fuera de alcance: transcripción de audio, dashboard web, multiusuario, deploy, datos reales de clientes.
@@ -117,4 +116,4 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: todos los comandos del README corren con `--fake` y salen con exit 0.
 - Verificación: `python -m jevqa --help` → lista auditar, comparar e informe.
 - Riesgo: el README se desfasa del código → la verificación ejecuta sus comandos.
-- [ ] cerrada
+- [x] cerrada
