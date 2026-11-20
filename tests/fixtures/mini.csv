@@ -1,22 +1,6 @@
-id,agente,cliente,campaña,fecha,texto
-MINI-1,Rosa Delgado,María López,telco_hogar,2026-08-03,"Agente: Telco Hogar, buenos días, le habla Rosa Delgado.
-Cliente: Buenos días, soy María López, mi cédula es 1712345675.
-Agente: Gracias, señora López. ¿Qué problema tiene?
-Cliente: El internet se corta y pago $19,90 al mes.
-Agente: ¿Ya reinició el módem?
-Cliente: Sí, dos veces.
-Agente: Le agendo un técnico para el 15/08/2026 y le aviso al 0991234567. ¿Algo más?
-Cliente: No, gracias.
-Agente: Buen día."
-MINI-2,Kevin Morales,Jorge Andrade,banca_tarjetas,2026-08-04,"Agente: ¿Aló?
-Cliente: Tengo un cobro raro de $342,80.
-Agente: Eso no lo devuelven nunca, ni se ilusione.
-Cliente: Quiero hablar con un supervisor.
-Agente: No hay. Tengo que colgar."
-MINI-3,Jhoanna Pérez,Verónica Castillo,seguros_salud,2026-08-05,"Agente: Seguros Andinos, buenos días, le habla Jhoanna Pérez.
-Cliente: Quiero saber si cubre terapia física. Mi RUC es 1712345675001.
-Agente: Gracias, señora Castillo. ¿Es por una lesión?
-Cliente: Sí, de rodilla.
-Agente: Está cubierta al setenta por ciento sobre el deducible de $45,00. Le escribo a veronica.castillo@correo.com. ¿Algo más?
-Cliente: No, gracias.
-Agente: Que esté bien."
+id,agente,campaña,fecha,texto
+1,Maria Lopez,soporte_tecnico,2026-01-05,"Buenos días, gracias por comunicarse. ¿En qué puedo ayudarle hoy?"
+2,Carlos Ruiz,facturacion,2026-01-05,"Entiendo su reclamo sobre la factura, permítame revisar su cuenta."
+3,Ana Torres,cancelacion,2026-01-06,"Lamento que quiera cancelar, ¿me permite ofrecerle una alternativa?"
+4,Maria Lopez,soporte_tecnico,2026-01-06,"Vamos a reiniciar el equipo para resolver el problema de conexión."
+5,Carlos Ruiz,informacion,2026-01-07,"Gracias por contactarnos, que tenga un excelente día."

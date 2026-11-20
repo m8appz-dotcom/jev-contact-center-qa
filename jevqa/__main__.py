@@ -1,4 +1,18 @@
-"""Punto de entrada de la CLI: `python -m jevqa`."""
+"""CLI de jevqa.
+
+    python -m jevqa auditar <entrada.csv> [--salida <salida.csv>] [--fake]
+    python -m jevqa comparar <humano.csv> <resultados.csv> [--salida <archivo.md>]
+    python -m jevqa informe <resultados.csv> [--salida-dir <dir>] [--coste-por-llamada <usd>]
+
+Códigos de salida:
+    0 = comando completado sin errores (para `auditar`: además, sin filas en
+        estado `error`).
+    2 = entrada inválida (columnas faltantes, CSV vacío, id vacío o repetido,
+        `InformeError`, `ComparacionError` o `RubricError`).
+    3 = error de autenticación con Jev: se abortó el lote (conserva lo escrito).
+    4 = el lote terminó pero una o más filas quedaron en estado `error`.
+    5 = la salida existente tiene una cabecera distinta a la esperada.
+"""
 
 from __future__ import annotations
 
@@ -6,168 +20,159 @@ import argparse
 import os
 import sys
 
-from jevqa import __version__
-from jevqa.compare import ErrorComparacion, comparar, escribir, resumen_consola
-from jevqa.jev_client import FakeJev, JevClient
-from jevqa.pipeline import ErrorEntrada, Limitador, auditar, imprimir_resumen
-from jevqa.report import ErrorResultados, generar_informes
-from jevqa.rubric import ErrorRubrica, load_rubric
-from jevqa.scoring import ErrorScoring
+from jevqa import compare
+from jevqa import pipeline
+from jevqa import report
+from jevqa import rubric as rubric_mod
+from jevqa.jev_client import FakeJev, JevAuthError, JevClient
 
-RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUBRICA = os.path.join(RAIZ, "rubrics", "soporte_es.json")
-CARPETA_SALIDAS = os.path.join(RAIZ, "salidas")
+REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+RUBRIC_PATH = os.path.join(REPO_ROOT, "rubrics", "soporte_es.json")
+
+EXIT_OK = 0
+EXIT_ENTRADA_INVALIDA = 2
+EXIT_AUTH_ERROR = 3
+EXIT_FILAS_CON_ERROR = 4
+EXIT_SALIDA_INVALIDA = 5
 
 
 def _salida_por_defecto(entrada: str) -> str:
-    nombre = os.path.splitext(os.path.basename(entrada))[0]
-    return os.path.join(CARPETA_SALIDAS, f"{nombre}_resultados.csv")
+    raiz, _ext = os.path.splitext(entrada)
+    return f"{raiz}.auditado.csv"
 
 
-def _cliente(args) -> object | None:
-    """Devuelve el cliente a usar, o None si falta la clave en modo real."""
-    if args.fake:
-        return FakeJev()
-    cliente = JevClient()
-    if not cliente.clave:
-        print(
-            "falta TYPESAFE_API_KEY en el entorno; para probar sin red usa --fake",
-            file=sys.stderr,
-        )
-        return None
-    return cliente
+def _comparacion_por_defecto(resultados: str) -> str:
+    return f"{resultados}.comparacion.md"
 
 
-def _comando_auditar(args) -> int:
-    rubrica = load_rubric(args.rubrica)
-    cliente = _cliente(args)
-    if cliente is None:
-        return 2
+def _informes_por_defecto(resultados: str) -> str:
+    raiz, _ext = os.path.splitext(resultados)
+    return f"{raiz}_informes"
 
-    salida = args.salida or _salida_por_defecto(args.entrada)
-    resumen = auditar(
-        args.entrada,
-        salida,
-        rubrica,
-        cliente,
-        concurrencia=args.concurrencia,
-        limitador=Limitador(args.por_minuto),
+
+def _fake_response_por_defecto(rubric: dict) -> dict:
+    """Respuesta cruda determinista y válida para la rúbrica, sin red ni azar."""
+    answers = {}
+    for item in rubric["items"]:
+        answers[item["id"]] = {"type": "noul", "noul": 0.9}
+    answers[rubric_mod.RIESGO_ID] = {
+        "type": "score",
+        "score": 0,
+        "confidence": 0.9,
+        "probabilities": {"0": 0.9, "1": 0.06, "2": 0.03, "3": 0.01},
+    }
+    opciones = list(rubric["motivo"]["opciones"].keys())
+    probabilities = {op: round(1.0 / len(opciones), 4) for op in opciones}
+    answers[rubric_mod.MOTIVO_ID] = {
+        "type": "choice",
+        "choice": opciones[0],
+        "confidence": 0.6,
+        "probabilities": probabilities,
+    }
+    return {"model": "fake-jev", "answers": answers}
+
+
+def _auditar(entrada: str, salida: str | None, fake: bool) -> int:
+    rubric = rubric_mod.load_rubric(RUBRIC_PATH)
+    salida = salida or _salida_por_defecto(entrada)
+    cliente = (
+        FakeJev(default_response=_fake_response_por_defecto(rubric)) if fake else JevClient()
     )
-    imprimir_resumen(resumen, salida)
-    return 0
 
+    try:
+        resumen = pipeline.auditar(entrada, salida, cliente, rubric)
+    except pipeline.EntradaInvalidaError as exc:
+        print(f"Entrada inválida: {exc}", file=sys.stderr)
+        return EXIT_ENTRADA_INVALIDA
+    except pipeline.SalidaInvalidaError as exc:
+        print(f"Salida inválida: {exc}", file=sys.stderr)
+        return EXIT_SALIDA_INVALIDA
+    except JevAuthError as exc:
+        print(f"Error de autenticación con Jev: {exc}", file=sys.stderr)
+        return EXIT_AUTH_ERROR
 
-def _comando_informe(args) -> int:
-    rubrica = load_rubric(args.rubrica)
-    carpeta = args.salida or CARPETA_SALIDAS
-    rutas = generar_informes(
-        args.resultados, carpeta, rubrica, desde=args.desde, hasta=args.hasta
+    print(
+        f"ok={resumen['ok']} error={resumen['error']} "
+        f"demasiado_larga={resumen['demasiado_larga']} saltadas={resumen['saltadas']} "
+        f"llamadas={resumen['llamadas']} -> {salida}"
     )
-    if not rutas:
-        print("No hay interacciones en ese periodo: no se generó ningún informe.")
-        return 0
-    print(f"{len(rutas)} informe(s):")
+    return EXIT_FILAS_CON_ERROR if resumen["error"] > 0 else EXIT_OK
+
+
+def _comparar(humano: str, resultados: str, salida: str | None) -> int:
+    salida = salida or _comparacion_por_defecto(resultados)
+    try:
+        resultado = compare.comparar(humano, resultados)
+    except compare.ComparacionError as exc:
+        print(f"Error de comparación: {exc}", file=sys.stderr)
+        return EXIT_ENTRADA_INVALIDA
+
+    try:
+        with open(salida, "w", encoding="utf-8") as f:
+            f.write(compare.render_comparacion(resultado))
+    except OSError as exc:
+        print(f"No se puede escribir {salida}: {exc}", file=sys.stderr)
+        return EXIT_ENTRADA_INVALIDA
+
+    for item in resultado["items"]:
+        r = resultado["por_item"][item]
+        kappa_txt = f"{r['kappa']:.4f}" if r["kappa"] is not None else "indefinido"
+        print(f"{item}: acuerdo={r['acuerdo']:.1%} kappa={kappa_txt}")
+    print(f"n={resultado['n']} -> {salida}")
+    return EXIT_OK
+
+
+def _informe(entrada: str, salida_dir: str | None, coste_por_llamada: float | None) -> int:
+    salida_dir = salida_dir or _informes_por_defecto(entrada)
+    kwargs = {} if coste_por_llamada is None else {"coste_por_llamada": coste_por_llamada}
+    try:
+        rubric = rubric_mod.load_rubric(RUBRIC_PATH)
+        rutas = report.generar_informes(rubric, entrada, salida_dir, **kwargs)
+    except (report.InformeError, rubric_mod.RubricError) as exc:
+        print(f"Error de informe: {exc}", file=sys.stderr)
+        return EXIT_ENTRADA_INVALIDA
+
     for ruta in rutas:
-        print(f"  {ruta}")
-    return 0
-
-
-def _comando_comparar(args) -> int:
-    rubrica = load_rubric(args.rubrica)
-    resultado = comparar(args.humano, args.resultados, rubrica)
-    print(resumen_consola(resultado))
-    ruta = escribir(resultado, args.salida or os.path.join(CARPETA_SALIDAS, "comparacion.md"))
-    print()
-    print(f"Comparación completa: {ruta}")
-    return 0
-
-
-def _argumento_fake_sin_efecto(parser: argparse.ArgumentParser) -> None:
-    # Este comando no llama a Jev. Se acepta --fake para que cualquier comando
-    # del README se pueda correr igual en una prueba sin red.
-    parser.add_argument(
-        "--fake", action="store_true", help="sin efecto: este comando no llama a Jev"
-    )
-
-
-def construir_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="python -m jevqa",
-        description="Auditoría de calidad de contact centers con Jev.",
-    )
-    parser.add_argument("--version", action="version", version=f"jevqa {__version__}")
-    comandos = parser.add_subparsers(dest="comando", metavar="comando")
-
-    auditar_cmd = comandos.add_parser(
-        "auditar",
-        help="audita un CSV de transcripciones y escribe un CSV de resultados",
-        description=(
-            "Anonimiza cada transcripción y la evalúa con una sola petición a Jev. "
-            "Relanzar el mismo comando salta los ids que ya están en la salida, "
-            "así que un lote interrumpido no se paga dos veces."
-        ),
-    )
-    auditar_cmd.add_argument("entrada", help="CSV con id, agente, campaña, fecha y texto")
-    auditar_cmd.add_argument("--salida", help="CSV de resultados (por defecto, en salidas/)")
-    auditar_cmd.add_argument("--rubrica", default=RUBRICA)
-    auditar_cmd.add_argument("--fake", action="store_true", help="usa FakeJev, sin red ni coste")
-    auditar_cmd.add_argument("--concurrencia", type=int, default=8)
-    auditar_cmd.add_argument(
-        "--por-minuto",
-        type=int,
-        default=960,
-        dest="por_minuto",
-        help="tope de peticiones por minuto (el límite de la API es 1200)",
-    )
-    auditar_cmd.set_defaults(funcion=_comando_auditar)
-
-    informe_cmd = comandos.add_parser(
-        "informe",
-        help="genera un informe HTML por campaña a partir de los resultados",
-        description=(
-            "Califica cada interacción del CSV de resultados y escribe un HTML por "
-            "campaña con el ranking de agentes, las peores interacciones, la cola de "
-            "revisión y el coste de Jev del periodo."
-        ),
-    )
-    informe_cmd.add_argument("resultados", help="CSV que deja `auditar`")
-    informe_cmd.add_argument("--salida", help="carpeta de los informes (por defecto, salidas/)")
-    informe_cmd.add_argument("--rubrica", default=RUBRICA)
-    informe_cmd.add_argument("--desde", help="primera fecha del periodo, AAAA-MM-DD")
-    informe_cmd.add_argument("--hasta", help="última fecha del periodo, AAAA-MM-DD")
-    _argumento_fake_sin_efecto(informe_cmd)
-    informe_cmd.set_defaults(funcion=_comando_informe)
-
-    comparar_cmd = comandos.add_parser(
-        "comparar",
-        help="compara la auditoría de Jev con una auditoría humana",
-        description=(
-            "Acuerdo y kappa de Cohen por ítem, más la matriz de confusión, entre un "
-            "CSV auditado a mano (id y una columna por ítem con cumple/no) y los "
-            "resultados de `auditar`."
-        ),
-    )
-    comparar_cmd.add_argument("humano", help="CSV auditado a mano")
-    comparar_cmd.add_argument("resultados", help="CSV que deja `auditar`")
-    comparar_cmd.add_argument("--salida", help="archivo Markdown (por defecto, salidas/comparacion.md)")
-    comparar_cmd.add_argument("--rubrica", default=RUBRICA)
-    _argumento_fake_sin_efecto(comparar_cmd)
-    comparar_cmd.set_defaults(funcion=_comando_comparar)
-
-    return parser
+        print(ruta)
+    return EXIT_OK
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = construir_parser()
+    argv = argv if argv is not None else sys.argv[1:]
+
+    parser = argparse.ArgumentParser(prog="jevqa")
+    subparsers = parser.add_subparsers(dest="comando", required=True)
+
+    auditar_parser = subparsers.add_parser(
+        "auditar", help="Audita un CSV de interacciones por lotes."
+    )
+    auditar_parser.add_argument("entrada")
+    auditar_parser.add_argument("--salida", default=None)
+    auditar_parser.add_argument("--fake", action="store_true")
+
+    comparar_parser = subparsers.add_parser(
+        "comparar", help="Compara resultados de Jev contra una auditoría humana."
+    )
+    comparar_parser.add_argument("humano")
+    comparar_parser.add_argument("resultados")
+    comparar_parser.add_argument("--salida", default=None)
+
+    informe_parser = subparsers.add_parser(
+        "informe", help="Genera un informe HTML por campaña a partir de resultados auditados."
+    )
+    informe_parser.add_argument("entrada")
+    informe_parser.add_argument("--salida-dir", default=None)
+    informe_parser.add_argument("--coste-por-llamada", type=float, default=None)
+
     args = parser.parse_args(argv)
-    if not getattr(args, "funcion", None):
-        parser.print_help()
-        return 1
-    try:
-        return args.funcion(args)
-    except (ErrorEntrada, ErrorRubrica, ErrorResultados, ErrorComparacion, ErrorScoring) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
+
+    if args.comando == "auditar":
+        return _auditar(args.entrada, args.salida, args.fake)
+    if args.comando == "comparar":
+        return _comparar(args.humano, args.resultados, args.salida)
+    if args.comando == "informe":
+        return _informe(args.entrada, args.salida_dir, args.coste_por_llamada)
+    return EXIT_ENTRADA_INVALIDA  # inalcanzable: argparse ya exige un subcomando válido.
 
 
 if __name__ == "__main__":

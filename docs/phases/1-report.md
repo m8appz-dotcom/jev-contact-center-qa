@@ -1,0 +1,7 @@
+# Fase 1 — Rúbrica, cliente Jev y conjunto de validación
+- Qué cambió: `jevqa/rubric.py` (load_rubric, build_request con N+2 preguntas y `state` único, parse_response con error tipado `RespuestaIncompletaError`), `jevqa/jev_client.py` (JevClient urllib con reintento exponencial en 429/500/502/503/529, sin reintento en 401; FakeJev), rúbrica `rubrics/soporte_es.json` (6 ítems, 2 críticos), 40 interacciones sintéticas (8 ambiguas), fixture copiada de docs.typesafe.ai/api.md.
+- Comando: `python -m unittest discover -s tests -v`
+- Resultado: 24 tests, 0 fallos.
+- Riesgo / límites conocidos: formato validado solo contra la documentación (la fase 2 lo confirma en vivo). `parse_response` devuelve solo las respuestas por pregunta: `model` y `usage` de primer nivel se leen del JSON crudo. No se respeta la cabecera `Retry-After`; errores de red (`URLError`) no se reintentan.
+- A/B: etiqueta `base-f1` solo local (no hay remoto) y sin tests ocultos previos, por decisión del usuario.
+- Reapertura (revisión reforzada del paso 5 de phase-runner): timeout configurable en cada llamada HTTP, reintento de errores de red y de todo 5xx con espera exponencial y `Retry-After`, JSON inválido como error tipado, rechazo de ids repetidos o reservados (el invariante N+2 ya no se rompe en silencio), tipo de respuesta deducido de la rúbrica y campos ausentes como `RespuestaIncompletaError`, test de URL/método/cabecera/cuerpo, `__pycache__` fuera de git. 49 tests, 0 fallos.

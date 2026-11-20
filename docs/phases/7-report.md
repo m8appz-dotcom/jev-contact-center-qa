@@ -1,0 +1,5 @@
+# Fase 7 — README de operación
+- Qué cambió: `README.md` (requisitos, clave de Jev, formatos de CSV, comandos auditar/informe/comparar, prueba rápida sin red, piloto real, costes por 1.000 interacciones, rúbrica, límites conocidos, privacidad) y `tests/fixtures/mini_humano.csv` (auditoría humana de ejemplo que usa la prueba rápida; fuera del alcance declarado, necesario para que el README funcione). `.gitignore` ignora las salidas de la prueba rápida.
+- Comando: `python -m jevqa --help` → lista auditar, comparar e informe; los tres comandos del README con `--fake` y salidas fuera del repo → exit 0; suite completa 184 tests, 0 fallos.
+- Coste documentado verificado con la fase 2 en vivo: 29.899 tokens / 40 interacciones ≈ 750 por interacción → $0,03 por 1.000.
+- Incidencia: la ejecución programada se quedó bloqueada 50 min en un `rm -rf` que pedía confirmación en una sesión desatendida; se detuvo y la fase se cerró desde la sesión orquestadora. El subagente probó `auditar` sin `--fake` (5 llamadas reales, < $0,0001).

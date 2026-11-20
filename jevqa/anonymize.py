@@ -1,24 +1,17 @@
-"""Anonimizador: ningún dato personal del cliente final sale hacia Jev.
+"""Anonimización de transcripciones antes de enviarlas a Jev (ley de datos de Ecuador).
 
-La Ley Orgánica de Protección de Datos Personales de Ecuador obliga a
-minimizar los datos que se transfieren a un tercero. Jev no necesita saber
-quién es el cliente para juzgar cómo lo atendieron, así que se tapa todo lo
-que lo identifique antes de armar la petición.
+Sustituye por etiquetas: cédulas y RUC válidos, tarjetas que pasan Luhn,
+teléfonos de Ecuador (móviles, fijos, +593), correos y los nombres que el
+llamador toma de las columnas del CSV (sin distinguir mayúsculas ni tildes).
 
-    >>> anonymize("Mi cédula es 1712345675 y pagué $19,90")
-    'Mi cédula es [CEDULA] y pagué $19,90'
+Los números solo se tapan si validan (dígito verificador, Luhn, formato de
+teléfono), para no borrar importes, fechas ni números de pedido.
 
-Dos decisiones de diseño que conviene tener presentes:
-
-* **Se detecta sobre el texto original, de una sola pasada.** Todos los
-  detectores marcan tramos sobre el mismo texto y después se resuelven los
-  solapamientos por prioridad. Así un nombre dentro de un correo no parte el
-  correo por la mitad, y ninguna etiqueta ya puesta se vuelve a analizar.
-* **Solo se tapa lo que se puede verificar.** Una cédula se tapa porque su
-  dígito verificador cuadra, y una tarjeta porque pasa Luhn. Diez dígitos
-  cualesquiera son un número de caso, no una cédula, y un importe no es un
-  teléfono. Tapar de más deja el texto sin la información que Jev necesita
-  para juzgar la llamada.
+Los nombres se sustituyen por `[NOMBRE_n]`, donde n es su posición (desde 1)
+en la lista `names`: el mapeo vive solo en memoria del llamador y `restore`
+lo deshace para el informe. Límites conocidos: un nombre propio que no está en
+`names` no se detecta; un apellido que también es palabra común ("Peña" y "pena")
+se tapa también como palabra (se prefiere tapar de más a filtrar).
 """
 
 from __future__ import annotations
@@ -26,290 +19,164 @@ from __future__ import annotations
 import re
 import unicodedata
 
-ETIQUETA_CEDULA = "[CEDULA]"
-ETIQUETA_RUC = "[RUC]"
-ETIQUETA_TELEFONO = "[TELEFONO]"
-ETIQUETA_CORREO = "[CORREO]"
-ETIQUETA_TARJETA = "[TARJETA]"
-ETIQUETA_NOMBRE = "[NOMBRE]"
+CEDULA = "[CEDULA]"
+RUC = "[RUC]"
+TARJETA = "[TARJETA]"
+TELEFONO = "[TELEFONO]"
+CORREO = "[CORREO]"
 
-ETIQUETAS = (
-    ETIQUETA_CEDULA,
-    ETIQUETA_RUC,
-    ETIQUETA_TELEFONO,
-    ETIQUETA_CORREO,
-    ETIQUETA_TARJETA,
-    ETIQUETA_NOMBRE,
+# Partículas de nombres compuestos que no se tapan solas ("María de la Cruz").
+_PARTICULAS = {"de", "del", "la", "las", "los", "y", "e", "da", "do", "dos", "van", "von"}
+_MIN_TOKEN = 3
+
+# Un número no empieza ni termina pegado a otro dígito ni a un separador decimal
+# seguido de dígito, para no tomar el trozo de un importe como "1.234.567.890,00".
+_ANTES = r"(?<![0-9])(?<![0-9][.,])"
+_DESPUES = r"(?![0-9])(?![.,][0-9])"
+
+_CORREO_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+_RUC_RE = re.compile(_ANTES + r"[0-9]{13}" + _DESPUES)
+# Tarjeta: seguida, en grupos de 4 o en formato Amex (4-6-5). Grupos fijos para
+# no unir dos números vecinos ("pedido 88214 0991234567") en una falsa tarjeta.
+_TARJETA_RE = re.compile(
+    _ANTES
+    + r"(?:[0-9]{13,19}|[0-9]{4}(?:[ -][0-9]{4}){2}[ -][0-9]{1,7}|[0-9]{4}[ -][0-9]{6}[ -][0-9]{4,5})"
+    + _DESPUES
 )
-
-#: Prioridad al resolver solapamientos: gana el número más bajo.
-_PRIORIDAD = {"correo": 0, "numero": 1, "nombre": 2}
-
-#: Un token de un nombre más corto que esto se ignora: "de", "la", "Ma".
-LARGO_MINIMO_NOMBRE = 3
-
-_PATRON_CORREO = re.compile(
-    r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"
+_CEDULA_RE = re.compile(_ANTES + r"[0-9]{9}-?[0-9]" + _DESPUES)
+_PREFIJO_593 = r"(?:(?:\+|00)[ ]?)?593[ .-]?"
+# Un teléfono no empieza donde empieza una fecha dd-mm-yyyy (o con / o .):
+# "09-12-2024 10:30" daría los 10 dígitos de un móvil.
+_NO_FECHA = r"(?![0-9]{1,2}([-/.])[0-9]{1,2}\1[0-9]{4}(?![0-9]))"
+_MOVIL_RE = re.compile(
+    r"(?<![\w+])" + _NO_FECHA + r"(?:" + _PREFIJO_593 + r"|0)9(?:[ .-]?[0-9]){8}" + _DESPUES
 )
-
-#: Grupos de dos o más dígitos separados por espacio o guion. Exige dos
-#: dígitos por grupo para no enganchar el "5" de "5 GB", y no admite ni "/"
-#: ni "." como separador para no unir las partes de una fecha o un importe.
-_PATRON_NUMERO = re.compile(r"(?<![\w@.,])\+?\d{2,}(?:[ \-]\d{2,})*(?![\w])")
-
-#: Provincias válidas en una cédula: 01 a 24, más 30 para los extranjeros.
-_PROVINCIAS = set(range(1, 25)) | {30}
+_FIJO_RE = re.compile(
+    r"(?<![\w+])" + _NO_FECHA
+    + r"(?:" + _PREFIJO_593 + r"\(?|\(?0)[2-7]\)?(?:[ .-]?[0-9]){7}" + _DESPUES
+)
+_NOMBRE_RE = re.compile(r"\[NOMBRE_([0-9]+)\]")
 
 
-# ---------------------------------------------------------------------------
-# Validadores
-# ---------------------------------------------------------------------------
+def _provincia_valida(digits: str) -> bool:
+    return 1 <= int(digits[:2]) <= 24 or digits[:2] == "30"
 
-def cedula_valida(numero: str) -> bool:
-    """Diez dígitos con provincia, tercer dígito de persona natural y módulo 10."""
-    if len(numero) != 10 or not numero.isdigit():
-        return False
-    if int(numero[:2]) not in _PROVINCIAS:
-        return False
-    if int(numero[2]) > 5:
+
+def _cedula_valida(digits: str) -> bool:
+    """Cédula de persona natural: provincia, tercer dígito < 6 y módulo 10."""
+    if len(digits) != 10 or not _provincia_valida(digits) or int(digits[2]) >= 6:
         return False
     total = 0
-    for posicion, digito in enumerate(numero[:9]):
-        producto = int(digito) * (2 if posicion % 2 == 0 else 1)
-        total += producto - 9 if producto > 9 else producto
-    return (10 - total % 10) % 10 == int(numero[9])
+    for i, d in enumerate(digits[:9]):
+        p = int(d) * (2 if i % 2 == 0 else 1)
+        total += p - 9 if p > 9 else p
+    return (10 - total % 10) % 10 == int(digits[9])
 
 
-def _modulo_11(numero: str, coeficientes: tuple[int, ...], posicion: int) -> bool:
-    total = sum(int(d) * c for d, c in zip(numero, coeficientes))
-    resto = total % 11
-    verificador = 0 if resto == 0 else 11 - resto
-    return verificador == int(numero[posicion])
-
-
-def ruc_valido(numero: str) -> bool:
-    """Trece dígitos: persona natural, sociedad privada o entidad pública."""
-    if len(numero) != 13 or not numero.isdigit():
+def _ruc_valido(digits: str) -> bool:
+    """RUC: cédula + establecimiento, o sociedad (tercer dígito 6 o 9)."""
+    if len(digits) != 13 or digits[10:] == "000" or not _provincia_valida(digits):
         return False
-    if int(numero[:2]) not in _PROVINCIAS:
-        return False
-    if numero[10:] == "000":
-        return False
-
-    tercero = int(numero[2])
-    if tercero < 6:  # persona natural: cédula + código de establecimiento
-        return cedula_valida(numero[:10])
-    if tercero == 6:  # entidad pública: verificador en la novena posición
-        return numero[9:] != "0000" and _modulo_11(
-            numero[:8], (3, 2, 7, 6, 5, 4, 3, 2), 8
-        )
-    if tercero == 9:  # sociedad privada o extranjero sin cédula
-        return _modulo_11(numero[:9], (4, 3, 2, 7, 6, 5, 4, 3, 2), 9)
-    return False
+    return digits[2] in "69" or _cedula_valida(digits[:10])
 
 
-def luhn_valido(numero: str) -> bool:
-    """Dígito de control de una tarjeta (ISO/IEC 7812)."""
-    if not numero.isdigit():
-        return False
+def _luhn_valido(digits: str) -> bool:
     total = 0
-    for posicion, caracter in enumerate(reversed(numero)):
-        digito = int(caracter)
-        if posicion % 2 == 1:
-            digito *= 2
-            if digito > 9:
-                digito -= 9
-        total += digito
+    for i, d in enumerate(reversed(digits)):
+        n = int(d)
+        if i % 2 == 1:
+            n = n * 2 - 9 if n > 4 else n * 2
+        total += n
     return total % 10 == 0
 
 
-def _telefono(numero: str) -> bool:
-    """Celular (09 y ocho dígitos) o fijo (0, código de área y siete dígitos)."""
-    if len(numero) == 10 and numero.startswith("09"):
-        return True
-    return len(numero) == 9 and numero[0] == "0" and numero[1] in "234567"
+def _sustituir_si(pattern: re.Pattern, text: str, valido, etiqueta: str) -> str:
+    def repl(m: re.Match) -> str:
+        digits = re.sub(r"[^0-9]", "", m.group(0))
+        return etiqueta if valido(digits) else m.group(0)
+
+    return pattern.sub(repl, text)
 
 
-def clasificar_numero(crudo: str) -> str | None:
-    """Devuelve la etiqueta que corresponde a un número, o None si no es un dato personal.
-
-    El orden importa: un RUC contiene una cédula y una tarjeta de trece dígitos
-    puede parecer un RUC, así que se comprueba de lo más específico a lo menos.
-    """
-    digitos = re.sub(r"\D", "", crudo)
-    if crudo.lstrip().startswith("+") or digitos.startswith("593"):
-        sin_pais = digitos[3:] if digitos.startswith("593") else digitos
-        if sin_pais and not sin_pais.startswith("0"):
-            sin_pais = "0" + sin_pais
-        if _telefono(sin_pais):
-            return ETIQUETA_TELEFONO
-
-    if ruc_valido(digitos):
-        return ETIQUETA_RUC
-    if cedula_valida(digitos):
-        return ETIQUETA_CEDULA
-    if 13 <= len(digitos) <= 19 and luhn_valido(digitos):
-        return ETIQUETA_TARJETA
-    if _telefono(digitos):
-        return ETIQUETA_TELEFONO
-    return None
+def _plegar(text: str) -> tuple[str, list[int]]:
+    """Minúsculas sin tildes, con el índice original de cada carácter plegado."""
+    chars: list[str] = []
+    origen: list[int] = []
+    for i, ch in enumerate(text):
+        for base in unicodedata.normalize("NFD", ch):
+            if unicodedata.combining(base):
+                continue
+            for c in base.casefold():
+                if not unicodedata.combining(c):
+                    chars.append(c)
+                    origen.append(i)
+    return "".join(chars), origen
 
 
-# ---------------------------------------------------------------------------
-# Comparación de nombres sin tildes ni mayúsculas
-# ---------------------------------------------------------------------------
-
-def _plegar(texto: str) -> str:
-    """Quita tildes y baja a minúsculas conservando la longitud del texto.
-
-    Conservar la longitud es lo que permite buscar sobre el texto plegado y
-    aplicar el resultado sobre el original por posición.
-    """
-    salida = []
-    for caracter in texto:
-        base = unicodedata.normalize("NFD", caracter)
-        base = "".join(c for c in base if not unicodedata.combining(c)) or caracter
-        minuscula = base[0].lower()
-        salida.append(minuscula[0] if minuscula else base[0])
-    return "".join(salida)
-
-
-def _terminos_de_nombres(names: list[str]) -> list[str]:
-    """El nombre completo y cada uno de sus tokens, de más largo a más corto."""
-    terminos: set[str] = set()
-    for nombre in names:
-        if not isinstance(nombre, str):
+def _patron_nombres(names: list[str]) -> tuple[re.Pattern | None, list[str]]:
+    """Una alternancia (de más larga a más corta) con el nombre completo y sus partes."""
+    etiquetas: dict[str, str] = {}
+    for n, name in enumerate(names, start=1):
+        tokens = re.findall(r"\w+", _plegar(name)[0])
+        if not tokens:
             continue
-        plegado = _plegar(nombre).strip()
-        if not plegado:
-            continue
-        terminos.add(plegado)
-        for token in re.split(r"[\s'\-]+", plegado):
-            if len(token) >= LARGO_MINIMO_NOMBRE:
-                terminos.add(token)
-    return sorted(terminos, key=len, reverse=True)
-
-
-# ---------------------------------------------------------------------------
-# Detección y sustitución
-# ---------------------------------------------------------------------------
-
-def _detectar(texto: str, names: list[str]) -> list[tuple[int, int, str, str]]:
-    tramos: list[tuple[int, int, str, str]] = []
-
-    for coincidencia in _PATRON_CORREO.finditer(texto):
-        tramos.append((coincidencia.start(), coincidencia.end(), "correo", ETIQUETA_CORREO))
-
-    for coincidencia in _PATRON_NUMERO.finditer(texto):
-        etiqueta = clasificar_numero(coincidencia.group())
-        if etiqueta is not None:
-            tramos.append((coincidencia.start(), coincidencia.end(), "numero", etiqueta))
-
-    terminos = _terminos_de_nombres(names)
-    if terminos:
-        plegado = _plegar(texto)
-        patron = re.compile(
-            r"(?<![\w])(?:" + "|".join(re.escape(t) for t in terminos) + r")(?![\w])"
-        )
-        for coincidencia in patron.finditer(plegado):
-            tramos.append(
-                (coincidencia.start(), coincidencia.end(), "nombre", ETIQUETA_NOMBRE)
-            )
-
-    return tramos
-
-
-def _sin_solapamientos(
-    tramos: list[tuple[int, int, str, str]]
-) -> list[tuple[int, int, str]]:
-    """Resuelve los solapamientos: gana la prioridad y, a igualdad, el más largo."""
-    ordenados = sorted(
-        tramos, key=lambda t: (t[0], _PRIORIDAD[t[2]], -(t[1] - t[0]))
+        candidatos = [r"\W+".join(map(re.escape, tokens))]
+        candidatos += [
+            re.escape(t) for t in tokens
+            if len(t) >= _MIN_TOKEN and t not in _PARTICULAS
+        ]
+        for c in candidatos:
+            etiquetas.setdefault(c, f"[NOMBRE_{n}]")
+    if not etiquetas:
+        return None, []
+    alternativas = sorted(etiquetas, key=len, reverse=True)
+    pattern = re.compile(
+        r"(?<!\w)(?:" + "|".join(f"({a})" for a in alternativas) + r")(?!\w)"
     )
-    elegidos: list[tuple[int, int, str]] = []
-    fin_anterior = -1
-    for inicio, fin, clase, etiqueta in ordenados:
-        if inicio < fin_anterior:
-            continue
-        elegidos.append((inicio, fin, etiqueta))
-        fin_anterior = fin
-    return elegidos
+    # Cada alternativa es un grupo: el grupo n que casa da su etiqueta.
+    return pattern, [etiquetas[a] for a in alternativas]
 
 
-class Mapa:
-    """Correspondencia entre cada etiqueta puesta y el valor original.
-
-    Vive solo en memoria y nunca se serializa: es lo que permite que el
-    informe interno muestre el nombre del agente sin que ese nombre haya
-    viajado a Jev. Las ocurrencias se guardan en orden, así que `restaurar`
-    puede deshacer la anonimización de ese mismo texto.
-    """
-
-    __slots__ = ("entradas",)
-
-    def __init__(self, entradas: list[tuple[str, str]] | None = None) -> None:
-        #: Lista de (etiqueta, valor original), en el orden en que aparecen.
-        self.entradas: list[tuple[str, str]] = list(entradas or [])
-
-    def __len__(self) -> int:
-        return len(self.entradas)
-
-    def valores(self, etiqueta: str) -> list[str]:
-        """Los valores originales tapados con una etiqueta, sin repetir."""
-        vistos: dict[str, None] = {}
-        for puesta, original in self.entradas:
-            if puesta == etiqueta:
-                vistos.setdefault(original, None)
-        return list(vistos)
-
-    def restaurar(self, texto: str) -> str:
-        """Deshace la anonimización de un texto producido por este mismo mapa."""
-        partes: list[str] = []
-        posicion = 0
-        patron = re.compile("|".join(re.escape(e) for e in ETIQUETAS))
-        for numero, coincidencia in enumerate(patron.finditer(texto)):
-            if numero >= len(self.entradas):
-                break
-            partes.append(texto[posicion : coincidencia.start()])
-            partes.append(self.entradas[numero][1])
-            posicion = coincidencia.end()
-        partes.append(texto[posicion:])
-        return "".join(partes)
-
-    def __repr__(self) -> str:  # pragma: no cover - ayuda al depurar
-        return f"<Mapa {len(self.entradas)} valores tapados>"
-
-
-def anonimizar_con_mapa(text: str, names: list[str] | None = None) -> tuple[str, Mapa]:
-    """Como `anonymize`, pero devuelve además el mapa reversible en memoria."""
-    if not text:
-        return text, Mapa()
-
-    tramos = _sin_solapamientos(_detectar(text, list(names or [])))
-    if not tramos:
-        return text, Mapa()
-
+def _sustituir_nombres(text: str, names: list[str]) -> str:
+    pattern, etiquetas = _patron_nombres(names)
+    if pattern is None:
+        return text
+    plegado, origen = _plegar(text)
     partes: list[str] = []
-    entradas: list[tuple[str, str]] = []
-    posicion = 0
-    for inicio, fin, etiqueta in tramos:
-        partes.append(text[posicion:inicio])
-        partes.append(etiqueta)
-        entradas.append((etiqueta, text[inicio:fin]))
-        posicion = fin
-    partes.append(text[posicion:])
-    return "".join(partes), Mapa(entradas)
+    fin_anterior = 0
+    for m in pattern.finditer(plegado):
+        inicio = origen[m.start()]
+        fin = origen[m.end() - 1] + 1
+        # Arrastra las marcas combinantes de un texto en forma NFD.
+        while fin < len(text) and unicodedata.combining(text[fin]):
+            fin += 1
+        partes.append(text[fin_anterior:inicio])
+        partes.append(etiquetas[m.lastindex - 1])
+        fin_anterior = fin
+    partes.append(text[fin_anterior:])
+    return "".join(partes)
 
 
 def anonymize(text: str, names: list[str] = []) -> str:
-    """Tapa los datos personales de `text`.
+    """Devuelve `text` con los datos personales sustituidos por etiquetas.
 
-    `names` son los nombres que vienen en las columnas del CSV (agente y
-    cliente). Se comparan sin distinguir mayúsculas ni tildes, tanto el nombre
-    completo como cada uno de sus tokens de tres letras o más.
-
-    Límite conocido: un nombre propio que no esté en ninguna columna no se
-    detecta. Si en la conversación aparece el nombre de un tercero, se va tal
-    cual. Ver el test `test_nombre_fuera_de_las_columnas_se_escapa`.
+    `names` son los nombres de agente y cliente tomados de las columnas del
+    CSV; no se modifica.
     """
-    return anonimizar_con_mapa(text, names)[0]
+    text = _CORREO_RE.sub(CORREO, text)
+    text = _sustituir_si(_RUC_RE, text, _ruc_valido, RUC)
+    text = _sustituir_si(_TARJETA_RE, text, _luhn_valido, TARJETA)
+    text = _sustituir_si(_CEDULA_RE, text, _cedula_valida, CEDULA)
+    text = _MOVIL_RE.sub(TELEFONO, text)
+    text = _FIJO_RE.sub(TELEFONO, text)
+    return _sustituir_nombres(text, names)
+
+
+def restore(text: str, names: list[str]) -> str:
+    """Deshace `[NOMBRE_n]` con la misma lista `names` usada al anonimizar."""
+
+    def repl(m: re.Match) -> str:
+        n = int(m.group(1))
+        return names[n - 1] if 1 <= n <= len(names) else m.group(0)
+
+    return _NOMBRE_RE.sub(repl, text)

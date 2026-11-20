@@ -1,423 +1,234 @@
-"""Tests de la nota, los umbrales y la cola de revisión."""
-
-from __future__ import annotations
-
-import json
-import os
-import tempfile
 import unittest
 
-from jevqa.jev_client import FakeJev
-from jevqa.rubric import build_request, load_rubric, parse_response
-from jevqa.scoring import (
-    ESTADO_APROBADO,
-    ESTADO_SUSPENSO,
-    MUESTRA_MINIMA,
-    REVISION_AMBIGUA,
-    REVISION_CONFIANZA,
-    SIN_CAMPANA,
-    ResultadoIncompleto,
-    UmbralInvalido,
-    agregar,
-    calificar,
-    cola_de_revision,
-    describir,
-    resolver_umbrales,
-    umbral_de_item,
-)
+from jevqa import scoring
 
-RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUBRICA_REAL = os.path.join(RAIZ, "rubrics", "soporte_es.json")
-
-#: Rúbrica de tres ítems con los pesos repartidos para que cada caso de prueba
-#: dé una nota redonda. `verifica_identidad` pesa poco y es crítico, igual que
-#: en la rúbrica real: es el caso que importa, nota alta y suspenso.
 ITEMS = [
-    {"id": "saludo", "pregunta": "¿Saluda?", "peso": 30, "critico": False},
-    {"id": "verifica_identidad", "pregunta": "¿Verifica?", "peso": 10, "critico": True},
-    {"id": "cierre", "pregunta": "¿Cierra?", "peso": 60, "critico": False},
+    {"id": "saludo", "pregunta": "¿saluda?", "peso": 0.1, "critico": False},
+    {"id": "escucha", "pregunta": "¿escucha?", "peso": 0.15, "critico": False},
+    {"id": "resolucion", "pregunta": "¿resuelve?", "peso": 0.3, "critico": False},
+    {"id": "trato_respetuoso", "pregunta": "¿trato respetuoso?", "peso": 0.25, "critico": True},
+    {"id": "proteccion_datos", "pregunta": "¿protege datos?", "peso": 0.1, "critico": True},
+    {"id": "despedida", "pregunta": "¿se despide?", "peso": 0.1, "critico": False},
 ]
-NIVELES = ["Ninguno: nada pendiente.", "Alto: puede terminar en reclamo."]
-OPCIONES = {"informacion": "Una consulta sin gestión.", "otro": "Ninguna de las anteriores."}
 
-#: Probabilidades que dan «cumple» con confianza alta: |2·0,95 − 1| = 0,9.
-TODO_BIEN = {"saludo": 0.95, "verifica_identidad": 0.95, "cierre": 0.95}
+ITEM_IDS = [item["id"] for item in ITEMS]
 
 
-def escribir_rubrica(**extra) -> str:
-    ruta = os.path.join(tempfile.mkdtemp(), "rubrica.json")
-    cruda = {
-        "id": "prueba",
-        "version": "1.0",
-        "items": ITEMS,
-        "riesgo": {"pregunta": "¿Riesgo?", "niveles": NIVELES},
-        "motivo": {"pregunta": "¿Motivo?", "opciones": OPCIONES},
-    }
-    cruda.update(extra)
-    with open(ruta, "w", encoding="utf-8") as archivo:
-        json.dump(cruda, archivo, ensure_ascii=False)
-    return ruta
+def rubric(umbrales=None):
+    r = {"items": [dict(item) for item in ITEMS]}
+    if umbrales is not None:
+        r["umbrales"] = umbrales
+    return r
 
 
-def respuesta_api(probabilidades: dict, *, nivel: int = 0, motivo: str = "informacion") -> dict:
-    """La respuesta cruda de la API con esas probabilidades por ítem."""
-    respuestas = {
-        qid: {"type": "noul", "noul": prob} for qid, prob in probabilidades.items()
-    }
-    respuestas["riesgo"] = {
-        "type": "score",
-        "score": float(nivel),
-        "confidence": 0.9,
-        "probabilities": {"0": 0.9, "1": 0.1} if nivel == 0 else {"0": 0.1, "1": 0.9},
-        "legend": {str(i): texto for i, texto in enumerate(NIVELES)},
-    }
-    respuestas["motivo"] = {
-        "type": "choice",
-        "choice": motivo,
-        "confidence": 0.9,
-        "probabilities": {"informacion": 0.9, "otro": 0.1},
-    }
-    return {
-        "model": "jev-1.13.0-test",
-        "answers": respuestas,
-        "usage": {"input_tokens": 100, "output_tokens": 20},
-    }
+def fila(id_, agente="ana", campaña="soporte", estado="ok", probabilidades=None, **extra):
+    d = {"id": id_, "agente": agente, "campaña": campaña, "estado": estado}
+    probabilidades = probabilidades or {}
+    for item_id in ITEM_IDS:
+        d[item_id] = probabilidades.get(item_id, 0.9)
+    d.update(extra)
+    return d
 
 
-class Caso(unittest.TestCase):
-    def setUp(self):
-        self.rubrica = load_rubric(escribir_rubrica())
-
-    def calificar(self, probabilidades: dict, *, rubrica=None, **kwargs) -> dict:
-        """Del diccionario de probabilidades a la calificación, pasando por la API."""
-        rubrica = rubrica if rubrica is not None else self.rubrica
-        resultado = parse_response(rubrica, respuesta_api(probabilidades))
-        return calificar(rubrica, resultado, **kwargs)
-
-
-# ---------------------------------------------------------------------------
-# Nota y estado
-# ---------------------------------------------------------------------------
-
-class Nota(Caso):
-    def test_todo_cumple(self):
-        calificacion = self.calificar(TODO_BIEN)
-        self.assertEqual(calificacion["nota"], 100.0)
-        self.assertEqual(calificacion["estado"], ESTADO_APROBADO)
-        self.assertEqual(calificacion["criticas_falladas"], [])
-        self.assertFalse(calificacion["revisar"])
-        self.assertEqual(calificacion["items_a_revisar"], [])
-
-    def test_nota_ponderada_por_los_pesos(self):
-        """Falla `saludo`, que pesa 30 de 100: quedan 70 y aprueba justo."""
-        calificacion = self.calificar({**TODO_BIEN, "saludo": 0.05})
-        self.assertEqual(calificacion["nota"], 70.0)
-        self.assertEqual(calificacion["estado"], ESTADO_APROBADO)
-        self.assertFalse(calificacion["items"]["saludo"]["cumple"])
-        self.assertTrue(calificacion["items"]["cierre"]["cumple"])
-
-    def test_nota_bajo_el_umbral_suspende_sin_criticas(self):
-        calificacion = self.calificar({**TODO_BIEN, "cierre": 0.05})
-        self.assertEqual(calificacion["nota"], 40.0)
-        self.assertEqual(calificacion["estado"], ESTADO_SUSPENSO)
-        self.assertEqual(calificacion["criticas_falladas"], [])
-
-    def test_falla_un_critico(self):
-        """Nota alta y suspenso: es justo el caso que la crítica tiene que cazar."""
-        calificacion = self.calificar({**TODO_BIEN, "verifica_identidad": 0.05})
-        self.assertEqual(calificacion["nota"], 90.0)
-        self.assertEqual(calificacion["estado"], ESTADO_SUSPENSO)
-        self.assertEqual(calificacion["criticas_falladas"], ["verifica_identidad"])
-
-    def test_todo_falla(self):
-        calificacion = self.calificar({qid: 0.05 for qid in TODO_BIEN})
-        self.assertEqual(calificacion["nota"], 0.0)
-        self.assertEqual(calificacion["estado"], ESTADO_SUSPENSO)
-        self.assertEqual(calificacion["criticas_falladas"], ["verifica_identidad"])
-
-    def test_la_probabilidad_justa_en_el_umbral_cumple(self):
-        calificacion = self.calificar({**TODO_BIEN, "saludo": 0.5})
-        self.assertTrue(calificacion["items"]["saludo"]["cumple"])
-        self.assertEqual(calificacion["nota"], 100.0)
-
-    def test_meta_se_copia_en_la_calificacion(self):
-        meta = {
-            "id": "INT-001",
-            "agente": "  Rosa Delgado ",
-            "campaña": "telco_hogar",
-            "fecha": "2026-08-03",
-        }
-        calificacion = self.calificar(TODO_BIEN, meta=meta)
-        self.assertEqual(calificacion["id"], "INT-001")
-        self.assertEqual(calificacion["agente"], "Rosa Delgado")
-        self.assertEqual(calificacion["campaña"], "telco_hogar")
-        self.assertEqual(calificacion["fecha"], "2026-08-03")
-
-    def test_sin_meta_los_campos_quedan_vacios(self):
-        calificacion = self.calificar(TODO_BIEN)
-        self.assertEqual(calificacion["id"], "")
-        self.assertEqual(calificacion["agente"], "")
-        self.assertEqual(calificacion["campaña"], "")
-
-    def test_resultado_al_que_le_falta_un_item(self):
-        resultado = parse_response(self.rubrica, respuesta_api(TODO_BIEN))
-        del resultado["items"]["cierre"]
-        with self.assertRaises(ResultadoIncompleto) as contexto:
-            calificar(self.rubrica, resultado)
-        self.assertEqual(contexto.exception.faltantes, ["cierre"])
-        self.assertIn("cierre", str(contexto.exception))
-
-    def test_riesgo_y_motivo_viajan_con_la_calificacion(self):
-        """El informe de la fase 6 los necesita y no debe volver a la respuesta cruda."""
-        calificacion = self.calificar(TODO_BIEN)
-        self.assertEqual(calificacion["motivo"]["valor"], "informacion")
-        self.assertEqual(calificacion["riesgo"]["nivel"], 0)
-
-
-# ---------------------------------------------------------------------------
-# Revisión humana
-# ---------------------------------------------------------------------------
-
-class Revision(Caso):
-    def test_item_ambiguo_va_a_revision(self):
-        """0,5 está en la banda 0,35–0,65 y además deja la confianza en 0."""
-        calificacion = self.calificar({**TODO_BIEN, "cierre": 0.5})
-        self.assertTrue(calificacion["revisar"])
-        self.assertEqual(calificacion["items_a_revisar"], ["cierre"])
-        self.assertTrue(calificacion["items"]["cierre"]["ambiguo"])
-        self.assertEqual(
-            calificacion["items"]["cierre"]["motivos_revision"],
-            [REVISION_CONFIANZA, REVISION_AMBIGUA],
-        )
-
-    def test_poca_confianza_fuera_de_la_banda_ambigua(self):
-        """0,8 decide con claridad hacia «cumple», pero |2·0,8 − 1| = 0,6 < 0,7."""
-        calificacion = self.calificar({**TODO_BIEN, "saludo": 0.8})
-        self.assertTrue(calificacion["revisar"])
-        self.assertFalse(calificacion["items"]["saludo"]["ambiguo"])
-        self.assertTrue(calificacion["items"]["saludo"]["poca_confianza"])
-        self.assertEqual(calificacion["motivos_revision"], [REVISION_CONFIANZA])
-
-    def test_una_ambigua_no_arrastra_a_las_demas(self):
-        calificacion = self.calificar({**TODO_BIEN, "cierre": 0.5})
-        self.assertFalse(calificacion["items"]["saludo"]["poca_confianza"])
-        self.assertFalse(calificacion["items"]["saludo"]["ambiguo"])
-
-    def test_la_cola_pone_las_criticas_primero(self):
-        cola = cola_de_revision(
-            [
-                {"id": "B", "nota": 20.0, "revisar": True, "criticas_falladas": []},
-                {"id": "A", "nota": 95.0, "revisar": True, "criticas_falladas": ["x"]},
-                {"id": "C", "nota": 10.0, "revisar": False, "criticas_falladas": ["x"]},
-                {"id": "D", "nota": 80.0, "revisar": True, "criticas_falladas": []},
-            ]
-        )
-        self.assertEqual([c["id"] for c in cola], ["A", "B", "D"])
-
-    def test_la_cola_vacia_no_falla(self):
-        self.assertEqual(cola_de_revision([]), [])
-        self.assertEqual(cola_de_revision([self.calificar(TODO_BIEN)]), [])
-
-
-# ---------------------------------------------------------------------------
-# Umbrales
-# ---------------------------------------------------------------------------
-
-class Umbrales(Caso):
+class TestUmbralesDe(unittest.TestCase):
     def test_por_defecto(self):
-        umbrales = resolver_umbrales(self.rubrica)
-        self.assertEqual(umbrales["cumple"], 0.5)
-        self.assertEqual(umbrales["confianza"], 0.7)
-        self.assertEqual(umbrales["ambiguo_min"], 0.35)
-        self.assertEqual(umbrales["ambiguo_max"], 0.65)
-        self.assertEqual(umbrales["aprobado"], 70.0)
+        self.assertEqual(scoring.umbrales_de(rubric()), scoring.DEFAULT_UMBRALES)
 
-    def test_la_rubrica_manda_sobre_los_valores_por_defecto(self):
-        rubrica = load_rubric(escribir_rubrica(umbrales={"aprobado": 95}))
-        calificacion = self.calificar({**TODO_BIEN, "saludo": 0.05}, rubrica=rubrica)
-        self.assertEqual(calificacion["nota"], 70.0)
-        self.assertEqual(calificacion["estado"], ESTADO_SUSPENSO)
+    def test_override_parcial(self):
+        u = scoring.umbrales_de(rubric({"confianza": 0.5}))
+        self.assertEqual(u["confianza"], 0.5)
+        self.assertEqual(u["aprobado"], scoring.DEFAULT_UMBRALES["aprobado"])
 
-    def test_umbral_por_item(self):
-        """La fase 2 pide subir el umbral de `verifica_identidad`, no el de todos."""
-        rubrica = load_rubric(escribir_rubrica(umbrales={"cumple_verifica_identidad": 0.75}))
-        umbrales = resolver_umbrales(rubrica)
-        self.assertEqual(umbral_de_item(umbrales, "verifica_identidad"), 0.75)
-        self.assertEqual(umbral_de_item(umbrales, "saludo"), 0.5)
+    def test_clave_desconocida(self):
+        with self.assertRaises(scoring.ScoringError):
+            scoring.umbrales_de(rubric({"otro": 1}))
 
-        calificacion = self.calificar(
-            {**TODO_BIEN, "verifica_identidad": 0.7, "saludo": 0.7}, rubrica=rubrica
-        )
-        self.assertEqual(calificacion["criticas_falladas"], ["verifica_identidad"])
-        self.assertTrue(calificacion["items"]["saludo"]["cumple"])
+    def test_min_mayor_que_max(self):
+        with self.assertRaises(scoring.ScoringError):
+            scoring.umbrales_de(rubric({"dudosa_min": 0.7, "dudosa_max": 0.6}))
 
-    def test_extra_manda_sobre_la_rubrica(self):
-        rubrica = load_rubric(escribir_rubrica(umbrales={"cumple": 0.9}))
-        umbrales = resolver_umbrales(rubrica, {"cumple": 0.4})
-        self.assertEqual(umbrales["cumple"], 0.4)
+    def test_valor_booleano(self):
+        with self.assertRaises(scoring.ScoringError):
+            scoring.umbrales_de(rubric({"confianza": True}))
 
-    def test_umbral_desconocido(self):
-        rubrica = load_rubric(escribir_rubrica(umbrales={"cumple_inventado": 0.5}))
-        with self.assertRaises(UmbralInvalido) as contexto:
-            resolver_umbrales(rubrica)
-        self.assertIn("cumple_inventado", str(contexto.exception))
+    def test_confianza_fuera_de_rango(self):
+        with self.assertRaises(scoring.ScoringError):
+            scoring.umbrales_de(rubric({"confianza": 1.5}))
 
-    def test_umbral_fuera_de_rango(self):
-        rubrica = load_rubric(escribir_rubrica(umbrales={"confianza": 1.5}))
-        with self.assertRaises(UmbralInvalido) as contexto:
-            resolver_umbrales(rubrica)
-        self.assertIn("confianza", str(contexto.exception))
-
-    def test_banda_ambigua_invertida(self):
-        rubrica = load_rubric(escribir_rubrica(umbrales={"ambiguo_min": 0.8}))
-        with self.assertRaises(UmbralInvalido) as contexto:
-            resolver_umbrales(rubrica)
-        self.assertIn("ambiguo_min", str(contexto.exception))
-
-    def test_umbral_no_numerico(self):
-        with self.assertRaises(UmbralInvalido):
-            resolver_umbrales(self.rubrica, {"cumple": "alto"})
-
-    def test_umbrales_se_pueden_reutilizar_entre_llamadas(self):
-        umbrales = resolver_umbrales(self.rubrica, {"aprobado": 100})
-        calificacion = self.calificar({**TODO_BIEN, "saludo": 0.05}, umbrales=umbrales)
-        self.assertEqual(calificacion["estado"], ESTADO_SUSPENSO)
+    def test_aprobado_fuera_de_rango(self):
+        with self.assertRaises(scoring.ScoringError):
+            scoring.umbrales_de(rubric({"aprobado": 150}))
 
 
-# ---------------------------------------------------------------------------
-# Agregados
-# ---------------------------------------------------------------------------
+class TestPuntuar(unittest.TestCase):
+    def test_todo_cumple(self):
+        r = scoring.puntuar(rubric(), fila("1"))
+        self.assertEqual(r["nota"], 100.0)
+        self.assertEqual(r["estado"], "aprobado")
+        self.assertEqual(r["criticos_fallidos"], [])
+        self.assertFalse(r["revision"])
 
-def calificacion_falsa(**extra) -> dict:
-    base = {
-        "id": "INT-000",
-        "agente": "Rosa Delgado",
-        "campaña": "telco_hogar",
-        "nota": 100.0,
-        "estado": ESTADO_APROBADO,
-        "criticas_falladas": [],
-        "revisar": False,
-    }
-    base.update(extra)
-    return base
+    def test_falla_critico_nota_alta_igual_suspenso(self):
+        probs = {item_id: 0.9 for item_id in ITEM_IDS}
+        probs["trato_respetuoso"] = 0.1
+        r = scoring.puntuar(rubric(), fila("1", probabilidades=probs))
+        self.assertEqual(r["estado"], "suspenso")
+        self.assertIn("trato_respetuoso", r["criticos_fallidos"])
+        # nota ponderada: 100 - 25 (peso de trato_respetuoso) = 75
+        self.assertEqual(r["nota"], 75.0)
+
+    def test_falla_no_critico_baja_nota_bajo_aprobado(self):
+        probs = {item_id: 0.9 for item_id in ITEM_IDS}
+        probs["resolucion"] = 0.1  # peso 0.3 -> nota 70, igual al umbral
+        probs["escucha"] = 0.1  # peso 0.15 -> nota final 55, bajo el umbral
+        r = scoring.puntuar(rubric(), fila("1", probabilidades=probs))
+        self.assertEqual(r["nota"], 55.0)
+        self.assertEqual(r["estado"], "suspenso")
+        self.assertEqual(r["criticos_fallidos"], [])
+
+    def test_item_ambiguo_p_050(self):
+        probs = {item_id: 0.9 for item_id in ITEM_IDS}
+        probs["saludo"] = 0.5
+        r = scoring.puntuar(rubric(), fila("1", probabilidades=probs))
+        self.assertTrue(r["revision"])
+        self.assertIn("saludo", r["motivos_revision"])
+
+    def test_item_ambiguo_por_banda(self):
+        probs = {item_id: 0.9 for item_id in ITEM_IDS}
+        probs["saludo"] = 0.6  # dentro de [0.35, 0.65], confianza 0.2 igual dudoso
+        r = scoring.puntuar(rubric(), fila("1", probabilidades=probs))
+        self.assertTrue(r["revision"])
+        self.assertIn("saludo", r["motivos_revision"])
+
+    def test_bordes_de_banda_inclusive(self):
+        for p in (0.35, 0.65):
+            probs = {item_id: 0.9 for item_id in ITEM_IDS}
+            probs["saludo"] = p
+            r = scoring.puntuar(rubric(), fila("1", probabilidades=probs))
+            self.assertIn("saludo", r["motivos_revision"])
+
+    def test_umbral_confianza_solo_dispara_revision(self):
+        probs = {item_id: 0.9 for item_id in ITEM_IDS}
+        probs["saludo"] = 0.8  # confianza 0.6 < 0.7 por defecto, fuera de la banda
+        self.assertFalse(0.35 <= probs["saludo"] <= 0.65)
+        r = scoring.puntuar(rubric(), fila("1", probabilidades=probs))
+        self.assertTrue(r["revision"])
+        self.assertIn("saludo", r["motivos_revision"])
+
+    def test_umbral_confianza_configurable_evita_revision(self):
+        probs = {item_id: 0.9 for item_id in ITEM_IDS}
+        probs["saludo"] = 0.8  # confianza 0.6
+        r = scoring.puntuar(rubric({"confianza": 0.5}), fila("1", probabilidades=probs))
+        self.assertFalse(r["revision"])
+        self.assertNotIn("saludo", r["motivos_revision"])
+
+    def test_fila_no_ok_error(self):
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(rubric(), fila("1", estado="error"))
+
+    def test_falta_columna_item(self):
+        f = fila("1")
+        del f["saludo"]
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(rubric(), f)
+
+    def test_valor_no_numerico(self):
+        f = fila("1")
+        f["saludo"] = "abc"
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(rubric(), f)
+
+    def test_valor_nan(self):
+        f = fila("1")
+        f["saludo"] = "nan"
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(rubric(), f)
+
+    def test_valor_fuera_de_rango(self):
+        f = fila("1")
+        f["saludo"] = "1.5"
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(rubric(), f)
+
+    def test_pesos_en_cero_invalido(self):
+        r = {"items": [{"id": "saludo", "pregunta": "x", "peso": 0, "critico": False}]}
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(r, {"id": "1", "estado": "ok", "saludo": 0.9})
+
+    def test_peso_infinito_invalido(self):
+        r = rubric()
+        r["items"][0]["peso"] = float("inf")
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(r, fila("1"))
+
+    def test_critico_no_booleano_invalido(self):
+        r = {"items": [{"id": "saludo", "pregunta": "x", "peso": 1, "critico": "si"}]}
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(r, {"id": "1", "estado": "ok", "saludo": 0.9})
+
+    def test_umbrales_invalidos_se_propagan(self):
+        with self.assertRaises(scoring.ScoringError):
+            scoring.puntuar(rubric({"dudosa_min": 0.9, "dudosa_max": 0.1}), fila("1"))
 
 
-class Agregados(unittest.TestCase):
-    def test_lista_vacia(self):
-        agregados = agregar([])
-        self.assertEqual(agregados["agentes"], [])
-        self.assertEqual(agregados["campanas"], [])
-        self.assertEqual(agregados["total"]["interacciones"], 0)
-        self.assertEqual(agregados["total"]["nota_media"], 0.0)
-        self.assertEqual(agregados["total"]["porcentaje_criticas"], 0.0)
-
-    def test_un_agente_con_una_interaccion_frente_a_otro_con_muchas(self):
-        """El de una sola llamada no puede encabezar un ranking: va marcado."""
-        calificaciones = [
-            calificacion_falsa(id="INT-001", agente="Nuevo", nota=100.0),
+class TestPuntuarLote(unittest.TestCase):
+    def test_separa_ok_de_sin_nota(self):
+        filas = [
+            fila("1"),
+            fila("2", estado="error"),
+            fila("3", estado="demasiado_larga"),
         ]
-        for numero in range(MUESTRA_MINIMA + 1):
-            calificaciones.append(
-                calificacion_falsa(
-                    id=f"INT-1{numero:02d}",
-                    agente="Veterana",
-                    nota=80.0 if numero else 50.0,
-                )
-            )
+        puntuadas, sin_nota = scoring.puntuar_lote(rubric(), filas)
+        self.assertEqual(len(puntuadas), 1)
+        self.assertEqual(sin_nota, 2)
 
-        agentes = {grupo["clave"]: grupo for grupo in agregar(calificaciones)["agentes"]}
-        self.assertEqual(agentes["Nuevo"]["interacciones"], 1)
-        self.assertEqual(agentes["Nuevo"]["nota_media"], 100.0)
-        self.assertFalse(agentes["Nuevo"]["muestra_suficiente"])
 
-        self.assertEqual(agentes["Veterana"]["interacciones"], MUESTRA_MINIMA + 1)
-        self.assertEqual(agentes["Veterana"]["nota_media"], 75.0)
-        self.assertEqual(agentes["Veterana"]["nota_minima"], 50.0)
-        self.assertEqual(agentes["Veterana"]["nota_maxima"], 80.0)
-        self.assertTrue(agentes["Veterana"]["muestra_suficiente"])
+class TestAgregar(unittest.TestCase):
+    def test_clave_invalida(self):
+        with self.assertRaises(scoring.ScoringError):
+            scoring.agregar(rubric(), [fila("1")], "fecha")
 
-    def test_el_peor_va_primero(self):
-        agregados = agregar(
-            [
-                calificacion_falsa(id="A", agente="Buena", nota=90.0),
-                calificacion_falsa(id="B", agente="Mala", nota=40.0),
-            ]
-        )
-        self.assertEqual([g["clave"] for g in agregados["agentes"]], ["Mala", "Buena"])
+    def test_lista_vacia(self):
+        self.assertEqual(scoring.agregar(rubric(), [], "agente"), {})
+
+    def test_agente_una_interaccion_vs_muchas(self):
+        probs_bajas = {item_id: 0.1 for item_id in ITEM_IDS}
+        filas = [
+            fila("1", agente="ana"),  # todo cumple, aprobado
+            fila("2", agente="beto", probabilidades=probs_bajas),  # todo falla, suspenso, crítico
+            fila("3", agente="beto"),  # todo cumple
+            fila("4", agente="beto", estado="error"),
+        ]
+        resultado = scoring.agregar(rubric(), filas, "agente")
+        self.assertEqual(resultado["ana"]["n"], 1)
+        self.assertEqual(resultado["ana"]["nota_media"], 100.0)
+        self.assertEqual(resultado["ana"]["pct_criticas"], 0.0)
+        self.assertEqual(resultado["ana"]["cola"], 0)
+
+        self.assertEqual(resultado["beto"]["n"], 2)
+        self.assertEqual(resultado["beto"]["sin_nota"], 1)
+        self.assertEqual(resultado["beto"]["nota_media"], 50.0)
+        self.assertEqual(resultado["beto"]["pct_criticas"], 50.0)
+        self.assertEqual(resultado["beto"]["cola"], 0)
 
     def test_campana_vacia(self):
-        agregados = agregar(
-            [
-                calificacion_falsa(id="A", campaña=""),
-                calificacion_falsa(id="B", campaña="   "),
-                calificacion_falsa(id="C", campaña="telco_hogar"),
-            ]
-        )
-        campanas = {grupo["clave"]: grupo for grupo in agregados["campanas"]}
-        self.assertEqual(sorted(campanas), sorted([SIN_CAMPANA, "telco_hogar"]))
-        self.assertEqual(campanas[SIN_CAMPANA]["interacciones"], 2)
+        filas = [
+            fila("1", campaña="vacia", estado="error"),
+            fila("2", campaña="vacia", estado="demasiado_larga"),
+        ]
+        resultado = scoring.agregar(rubric(), filas, "campaña")
+        self.assertEqual(resultado["vacia"]["n"], 0)
+        self.assertEqual(resultado["vacia"]["sin_nota"], 2)
+        self.assertIsNone(resultado["vacia"]["nota_media"])
+        self.assertEqual(resultado["vacia"]["pct_criticas"], 0.0)
+        self.assertEqual(resultado["vacia"]["cola"], 0)
 
-    def test_porcentaje_de_criticas_y_cola(self):
-        agregados = agregar(
-            [
-                calificacion_falsa(id="A", nota=90.0, estado=ESTADO_SUSPENSO,
-                                   criticas_falladas=["verifica_identidad"]),
-                calificacion_falsa(id="B", nota=100.0, revisar=True),
-                calificacion_falsa(id="C", nota=100.0),
-                calificacion_falsa(id="D", nota=100.0),
-            ]
-        )
-        total = agregados["total"]
-        self.assertEqual(total["interacciones"], 4)
-        self.assertEqual(total["criticas"], 1)
-        self.assertEqual(total["porcentaje_criticas"], 25.0)
-        self.assertEqual(total["suspensos"], 1)
-        self.assertEqual(total["porcentaje_suspensos"], 25.0)
-        self.assertEqual(total["cola"], 1)
-        self.assertEqual(total["porcentaje_cola"], 25.0)
-        self.assertEqual(total["nota_media"], 97.5)
-
-
-# ---------------------------------------------------------------------------
-# De punta a punta con la rúbrica real
-# ---------------------------------------------------------------------------
-
-class RubricaReal(unittest.TestCase):
-    def test_califica_lo_que_devuelve_fakejev(self):
-        rubrica = load_rubric(RUBRICA_REAL)
-        cliente = FakeJev()
-        calificaciones = []
-        for numero in range(6):
-            texto = f"Agente: buenos días, llamada número {numero}."
-            resultado = parse_response(rubrica, cliente.evaluar(build_request(rubrica, texto)))
-            calificaciones.append(
-                calificar(
-                    rubrica,
-                    resultado,
-                    meta={"id": f"INT-{numero:03d}", "agente": "Rosa", "campaña": "telco"},
-                )
-            )
-
-        for calificacion in calificaciones:
-            self.assertTrue(0.0 <= calificacion["nota"] <= 100.0)
-            self.assertIn(calificacion["estado"], (ESTADO_APROBADO, ESTADO_SUSPENSO))
-            self.assertEqual(len(calificacion["items"]), len(rubrica["items"]))
-
-        agregados = agregar(calificaciones)
-        self.assertEqual(agregados["total"]["interacciones"], 6)
-        self.assertTrue(agregados["agentes"][0]["muestra_suficiente"])
-        self.assertEqual(
-            agregados["total"]["cola"], len(cola_de_revision(calificaciones))
-        )
-
-    def test_describir_una_calificacion(self):
-        rubrica = load_rubric(escribir_rubrica())
-        resultado = parse_response(rubrica, respuesta_api({**TODO_BIEN, "verifica_identidad": 0.05}))
-        linea = describir(calificar(rubrica, resultado, meta={"id": "INT-007"}))
-        self.assertIn("INT-007", linea)
-        self.assertIn("90.0", linea)
-        self.assertIn(ESTADO_SUSPENSO, linea)
-        self.assertIn("verifica_identidad", linea)
+    def test_cola_cuenta_revision(self):
+        probs = {item_id: 0.9 for item_id in ITEM_IDS}
+        probs["saludo"] = 0.5
+        filas = [fila("1", campaña="c", probabilidades=probs)]
+        resultado = scoring.agregar(rubric(), filas, "campaña")
+        self.assertEqual(resultado["c"]["cola"], 1)
 
 
 if __name__ == "__main__":

@@ -1,318 +1,221 @@
-"""Comparación contra auditorías humanas: acuerdo, kappa y matriz de confusión.
+"""Comparación contra 100 auditorías humanas (fase 6).
 
-Es la prueba que se entrega en el piloto: el cliente audita a mano una muestra
-(el plan pide 100 interacciones), se pasa la misma muestra por `auditar`, y se
-mide ítem por ítem cuánto coinciden las dos auditorías.
-
-    python -m jevqa comparar humano.csv resultados.csv
-
-El CSV humano lleva una columna `id` y una columna por ítem de la rúbrica con
-`cumple` o `no`. `data/eval/sinteticas.csv` tiene exactamente esa forma.
-
-El kappa de Cohen importa más que el acuerdo: si el 95 % de las interacciones
-cumple un ítem, un auditor que diga siempre «cumple» acierta el 95 % sin mirar
-nada, y su kappa es 0.
+Lee un CSV humano (columna `id` + una columna 0/1 por ítem, con columnas de
+metadatos a ignorar) y el CSV auditado de `jevqa.pipeline.auditar`, y calcula
+acuerdo y kappa de Cohen por ítem, más la matriz de confusión. La matriz y el
+acuerdo se calculan con el humano como primer clasificador y Jev como
+segundo: `matriz[(humano, jev)]`. No hace I/O de más ni conoce la CLI.
 """
 
 from __future__ import annotations
 
 import csv
-import datetime
-import os
+import math
 
-from jevqa.scoring import resolver_umbrales, umbral_de_item
+from jevqa.pipeline import OUTPUT_HEADER_BASE
 
-CUMPLE = "cumple"
-NO = "no"
-ETIQUETAS = (CUMPLE, NO)
-
-#: Muestra que pide el plan para el piloto. Por debajo, el kappa se mueve mucho.
-MUESTRA_PILOTO = 100
+# Columnas del CSV humano que no son ítems de la rúbrica.
+METADATA_COLUMNS = {"texto", "ambiguo", "agente", "campaña", "fecha", "cliente", "notas"}
 
 
-class ErrorComparacion(Exception):
-    """Alguno de los dos CSV no existe o no tiene la forma esperada."""
+class ComparacionError(Exception):
+    """El CSV humano o el de resultados no tienen el formato esperado para comparar."""
 
 
-# ---------------------------------------------------------------------------
-# Métricas
-# ---------------------------------------------------------------------------
+def _leer_humano(path: str) -> tuple:
+    """Lee el CSV humano. Devuelve `(items, {id: {item: bool}})`."""
+    try:
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            if reader.fieldnames is None:
+                raise ComparacionError(f"el CSV humano está vacío: {path}")
+            if "id" not in reader.fieldnames:
+                raise ComparacionError(f"falta la columna 'id' en {path}")
+            items = [c for c in reader.fieldnames if c != "id" and c not in METADATA_COLUMNS]
+            filas = list(reader)
+    except (OSError, UnicodeDecodeError, csv.Error) as exc:
+        raise ComparacionError(f"no se puede leer {path} como CSV UTF-8: {exc}") from exc
 
-def matriz(pares: list[tuple[bool, bool]]) -> dict:
-    """Matriz de confusión 2×2. Filas: humano; columnas: Jev."""
-    celdas = {
-        "cumple_cumple": 0,
-        "cumple_no": 0,
-        "no_cumple": 0,
-        "no_no": 0,
-    }
-    for humano, jev in pares:
-        clave = f"{CUMPLE if humano else NO}_{CUMPLE if jev else NO}"
-        celdas[clave] += 1
-    return celdas
-
-
-def kappa(pares: list[tuple[bool, bool]]) -> float | None:
-    """Kappa de Cohen para dos evaluadores y dos clases.
-
-    Devuelve None cuando no está definido: si los dos dicen siempre lo mismo y
-    nunca cambian de clase, el acuerdo esperado por azar es 1 y el kappa es
-    0/0. Poner un 1 ahí sería afirmar un acuerdo que la muestra no puede
-    demostrar.
-    """
-    total = len(pares)
-    if not total:
-        return None
-    observado = sum(1 for humano, jev in pares if humano == jev) / total
-    humano_cumple = sum(1 for humano, _ in pares if humano) / total
-    jev_cumple = sum(1 for _, jev in pares if jev) / total
-    esperado = humano_cumple * jev_cumple + (1 - humano_cumple) * (1 - jev_cumple)
-    if esperado >= 1.0:
-        return None
-    return (observado - esperado) / (1 - esperado)
+    humano = {}
+    for fila in filas:
+        id_ = (fila.get("id") or "").strip()
+        if not id_:
+            raise ComparacionError(f"id vacío en {path}")
+        if id_ in humano:
+            raise ComparacionError(f"id repetido en {path}: '{id_}'")
+        valores = {}
+        for item in items:
+            valor = (fila.get(item) or "").strip()
+            if valor not in ("0", "1"):
+                raise ComparacionError(
+                    f"valor inválido para el id '{id_}', columna '{item}': {valor!r}"
+                )
+            valores[item] = valor == "1"
+        humano[id_] = valores
+    return items, humano
 
 
-def metricas(pares: list[tuple[bool, bool]]) -> dict:
-    total = len(pares)
-    acuerdos = sum(1 for humano, jev in pares if humano == jev)
-    return {
-        "n": total,
-        "acuerdos": acuerdos,
-        "acuerdo": acuerdos / total if total else None,
-        "kappa": kappa(pares),
-        "matriz": matriz(pares),
-    }
+def _leer_resultados(path: str) -> tuple:
+    """Lee el CSV auditado. Devuelve `(items, {id: {item: bool}})` solo para filas `ok`."""
+    try:
+        with open(path, "r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            fieldnames = reader.fieldnames
+            if fieldnames is None:
+                raise ComparacionError(f"el CSV de resultados está vacío: {path}")
+            base = len(OUTPUT_HEADER_BASE)
+            if (
+                fieldnames[:base] != OUTPUT_HEADER_BASE
+                or fieldnames[-2:] != ["riesgo", "motivo"]
+                or len(fieldnames) < base + 2
+            ):
+                raise ComparacionError(f"cabecera inesperada en {path}")
+            items = fieldnames[base:-2]
+            filas = list(reader)
+    except (OSError, UnicodeDecodeError, csv.Error) as exc:
+        raise ComparacionError(f"no se puede leer {path} como CSV UTF-8: {exc}") from exc
 
-
-# ---------------------------------------------------------------------------
-# Lectura
-# ---------------------------------------------------------------------------
-
-def _leer(ruta: str, que: str) -> tuple[list[str], list[dict]]:
-    if not os.path.exists(ruta):
-        raise ErrorComparacion(f"no existe el CSV {que} {ruta}")
-    with open(ruta, encoding="utf-8-sig", newline="") as archivo:
-        lector = csv.DictReader(archivo)
-        if lector.fieldnames is None:
-            raise ErrorComparacion(f"el CSV {que} {ruta} está vacío")
-        if "id" not in lector.fieldnames:
-            raise ErrorComparacion(f"el CSV {que} {ruta} no tiene columna id")
-        return list(lector.fieldnames), list(lector)
-
-
-def comparar(humano: str, resultados: str, rubrica: dict) -> dict:
-    """Compara la auditoría humana con la de Jev, ítem por ítem.
-
-    Nada se descarta en silencio: los ids humanos sin resultado, los que Jev no
-    pudo auditar, las etiquetas humanas vacías o ilegibles y los ítems que solo
-    existen en uno de los dos lados salen en el resultado con su motivo.
-    """
-    umbrales = resolver_umbrales(rubrica)
-    columnas_humano, filas_humano = _leer(humano, "humano")
-    columnas_jev, filas_jev = _leer(resultados, "de resultados")
-
-    ids_rubrica = [item["id"] for item in rubrica["items"]]
-    en_humano = [qid for qid in ids_rubrica if qid in columnas_humano]
-    en_jev = [qid for qid in ids_rubrica if f"{qid}_prob" in columnas_jev]
-    comparables = [qid for qid in ids_rubrica if qid in en_humano and qid in en_jev]
-    items_sin_comparar = [
-        {"item": qid, "falta_en": "humano" if qid not in en_humano else "resultados"}
-        for qid in ids_rubrica
-        if qid not in comparables
-    ]
-    if not comparables:
-        raise ErrorComparacion(
-            "no hay ningún ítem en común entre el CSV humano, el de resultados y la rúbrica "
-            f"{rubrica['id']}"
-        )
-
-    jev_por_id = {}
-    jev_con_error = []
-    for fila in filas_jev:
-        ident = (fila.get("id") or "").strip()
-        if fila.get("estado", "ok") != "ok":
-            jev_con_error.append(ident)
+    jev = {}
+    for fila in filas:
+        if fila.get("estado") != "ok":
             continue
-        jev_por_id[ident] = fila
-
-    pares: dict[str, list[tuple[bool, bool]]] = {qid: [] for qid in comparables}
-    sin_resultado: list[str] = []
-    con_error: list[str] = []
-    etiquetas_invalidas: list[dict] = []
-    comparadas = 0
-
-    for fila in filas_humano:
-        ident = (fila.get("id") or "").strip()
-        if ident not in jev_por_id:
-            (con_error if ident in jev_con_error else sin_resultado).append(ident)
-            continue
-        fila_jev = jev_por_id[ident]
-        comparadas += 1
-        for qid in comparables:
-            etiqueta = (fila.get(qid) or "").strip().lower()
-            if etiqueta not in ETIQUETAS:
-                etiquetas_invalidas.append({"id": ident, "item": qid, "valor": etiqueta})
-                continue
+        id_ = (fila.get("id") or "").strip()
+        valores = {}
+        for item in items:
+            valor = fila.get(item)
             try:
-                probabilidad = float(fila_jev[f"{qid}_prob"])
+                p = float(valor)
             except (TypeError, ValueError):
-                etiquetas_invalidas.append({"id": ident, "item": qid, "valor": "(sin dato de Jev)"})
-                continue
-            pares[qid].append((etiqueta == CUMPLE, probabilidad >= umbral_de_item(umbrales, qid)))
+                raise ComparacionError(
+                    f"probabilidad no numérica para el id '{id_}', ítem '{item}': {valor!r}"
+                )
+            if not (math.isfinite(p) and 0 <= p <= 1):
+                raise ComparacionError(
+                    f"probabilidad fuera de [0, 1] para el id '{id_}', ítem '{item}': {valor!r}"
+                )
+            valores[item] = p >= 0.5
+        jev[id_] = valores
+    return items, jev
 
-    por_item = {qid: metricas(pares[qid]) for qid in comparables}
-    todos = [par for qid in comparables for par in pares[qid]]
-    ids_humanos = {(f.get("id") or "").strip() for f in filas_humano}
+
+def _kappa(matriz: dict, n: int):
+    """Kappa de Cohen. Devuelve `None` (indefinido) si `pe == 1`."""
+    po = (matriz[("cumple", "cumple")] + matriz[("no_cumple", "no_cumple")]) / n
+    p_humano_cumple = (matriz[("cumple", "cumple")] + matriz[("cumple", "no_cumple")]) / n
+    p_jev_cumple = (matriz[("cumple", "cumple")] + matriz[("no_cumple", "cumple")]) / n
+    pe = p_humano_cumple * p_jev_cumple + (1 - p_humano_cumple) * (1 - p_jev_cumple)
+    if pe == 1:
+        return None
+    return (po - pe) / (1 - pe)
+
+
+def comparar(humano_csv: str, resultados_csv: str) -> dict:
+    """Compara `humano_csv` contra `resultados_csv`.
+
+    Devuelve un dict con `items` (intersección, en el orden de resultados),
+    `solo_humano`/`solo_jev` (ítems que faltan en una de las dos rúbricas),
+    `ids_sin_resultado` (ids humanos sin fila `ok` en resultados),
+    `ids_sin_humano` (ids de resultados sin fila humana), `n` (ids
+    comparados) y `por_item`: `{item: {"acuerdo", "kappa", "matriz"}}`, con
+    `matriz[(humano, jev)]` en `{"cumple", "no_cumple"}`.
+
+    Lanza `ComparacionError` si no hay ítems en común o si `n == 0`.
+    """
+    items_humano, humano = _leer_humano(humano_csv)
+    items_jev, jev = _leer_resultados(resultados_csv)
+
+    items = [i for i in items_jev if i in items_humano]
+    if not items:
+        raise ComparacionError("no hay ítems en común entre las dos rúbricas")
+    solo_humano = [i for i in items_humano if i not in items_jev]
+    solo_jev = [i for i in items_jev if i not in items_humano]
+
+    ids_sin_resultado = [id_ for id_ in humano if id_ not in jev]
+    ids_comparables = [id_ for id_ in humano if id_ in jev]
+    ids_sin_humano = [id_ for id_ in jev if id_ not in humano]
+
+    n = len(ids_comparables)
+    if n == 0:
+        raise ComparacionError("no hay ids en común para comparar")
+
+    por_item = {}
+    for item in items:
+        matriz = {
+            ("cumple", "cumple"): 0,
+            ("cumple", "no_cumple"): 0,
+            ("no_cumple", "cumple"): 0,
+            ("no_cumple", "no_cumple"): 0,
+        }
+        for id_ in ids_comparables:
+            h = "cumple" if humano[id_][item] else "no_cumple"
+            j = "cumple" if jev[id_][item] else "no_cumple"
+            matriz[(h, j)] += 1
+        acuerdo = (matriz[("cumple", "cumple")] + matriz[("no_cumple", "no_cumple")]) / n
+        por_item[item] = {"acuerdo": acuerdo, "kappa": _kappa(matriz, n), "matriz": matriz}
 
     return {
-        "rubrica": rubrica["id"],
-        "humano": humano,
-        "resultados": resultados,
-        "interacciones_humanas": len(filas_humano),
-        "interacciones_comparadas": comparadas,
-        "ids_sin_resultado": sin_resultado,
-        "ids_con_error_en_jev": con_error,
-        "ids_solo_en_resultados": sorted(set(jev_por_id) - ids_humanos),
-        "items": por_item,
-        "items_sin_comparar": items_sin_comparar,
-        "etiquetas_invalidas": etiquetas_invalidas,
-        "global": metricas(todos),
-        "criticos": [item["id"] for item in rubrica["items"] if item["critico"]],
+        "items": items,
+        "solo_humano": solo_humano,
+        "solo_jev": solo_jev,
+        "ids_sin_resultado": ids_sin_resultado,
+        "ids_sin_humano": ids_sin_humano,
+        "n": n,
+        "por_item": por_item,
     }
 
 
-# ---------------------------------------------------------------------------
-# Salida
-# ---------------------------------------------------------------------------
-
-def _pct(valor: float | None) -> str:
-    return "—" if valor is None else f"{valor * 100:.1f} %"
-
-
-def _k(valor: float | None) -> str:
-    return "sin definir" if valor is None else f"{valor:.3f}"
-
-
-def _lectura_kappa(valor: float | None) -> str:
-    """Escala de Landis y Koch, la que se usa en auditoría de calidad."""
-    if valor is None:
-        return "sin variación"
-    if valor < 0:
-        return "peor que el azar"
-    for tope, texto in ((0.2, "leve"), (0.4, "aceptable"), (0.6, "moderado"), (0.8, "sustancial")):
-        if valor <= tope:
-            return texto
-    return "casi perfecto"
-
-
-def _matriz_md(celdas: dict) -> list[str]:
-    return [
-        "| Humano \\ Jev | cumple | no |",
-        "| --- | --: | --: |",
-        f"| cumple | {celdas['cumple_cumple']} | {celdas['cumple_no']} |",
-        f"| no | {celdas['no_cumple']} | {celdas['no_no']} |",
-    ]
-
-
-def a_markdown(resultado: dict) -> str:
-    lineas = [
-        "# Comparación con la auditoría humana",
+def render_comparacion(resultado: dict) -> str:
+    """Markdown con la comparación: acuerdo/kappa por ítem, matrices y coberturas."""
+    partes = [
+        "# Comparación Jev vs. auditoría humana",
         "",
-        f"- Fecha: {datetime.date.today().isoformat()}",
-        f"- Rúbrica: `{resultado['rubrica']}`",
-        f"- Auditoría humana: `{resultado['humano']}` ({resultado['interacciones_humanas']} interacciones)",
-        f"- Resultados de Jev: `{resultado['resultados']}`",
-        f"- Interacciones comparadas: **{resultado['interacciones_comparadas']}**",
+        f"n comparado: {resultado['n']}",
         "",
-    ]
-    if resultado["interacciones_comparadas"] < MUESTRA_PILOTO:
-        lineas += [
-            f"> Muestra por debajo de las {MUESTRA_PILOTO} interacciones del piloto: con",
-            "> tan pocos casos el kappa se mueve mucho de una muestra a otra.",
-            "",
-        ]
-
-    lineas += [
         "## Acuerdo y kappa por ítem",
         "",
-        "| Ítem | Crítico | n | Acuerdo | Kappa | Lectura |",
-        "| --- | :-: | --: | --: | --: | --- |",
+        "| Ítem | Acuerdo | Kappa | N |",
+        "| --- | --- | --- | --- |",
     ]
-    for qid, m in resultado["items"].items():
-        lineas.append(
-            f"| `{qid}` | {'sí' if qid in resultado['criticos'] else ''} | {m['n']} | "
-            f"{_pct(m['acuerdo'])} | {_k(m['kappa'])} | {_lectura_kappa(m['kappa'])} |"
-        )
-    g = resultado["global"]
-    lineas += [
-        f"| **todos** |  | {g['n']} | {_pct(g['acuerdo'])} | {_k(g['kappa'])} | {_lectura_kappa(g['kappa'])} |",
-        "",
-        "Un kappa «sin definir» quiere decir que los dos lados dieron siempre la",
-        "misma clase: coinciden, pero la muestra no tiene ni un caso que lo pruebe.",
-        "",
-        "## Matriz de confusión (todos los ítems)",
-        "",
-        *_matriz_md(g["matriz"]),
-        "",
-        "La celda que importa es **humano «no» / Jev «cumple»**: son las fallas que",
-        "la auditoría automática deja pasar.",
-        "",
-        "## Matriz de confusión por ítem",
-        "",
-    ]
-    for qid, m in resultado["items"].items():
-        lineas += [f"### `{qid}`", "", *_matriz_md(m["matriz"]), ""]
+    for item in resultado["items"]:
+        r = resultado["por_item"][item]
+        kappa_txt = f"{r['kappa']:.4f}" if r["kappa"] is not None else "indefinido"
+        partes.append(f"| {item} | {r['acuerdo']:.1%} | {kappa_txt} | {resultado['n']} |")
 
-    avisos = []
+    partes.append("")
+    partes.append("## Matriz de confusión por ítem")
+    partes.append("")
+    partes.append("(orientación: fila = humano, columna = Jev)")
+    for item in resultado["items"]:
+        m = resultado["por_item"][item]["matriz"]
+        partes.append("")
+        partes.append(f"### {item}")
+        partes.append("")
+        partes.append("| | Jev cumple | Jev no cumple |")
+        partes.append("| --- | --- | --- |")
+        partes.append(
+            f"| Humano cumple | {m[('cumple', 'cumple')]} | {m[('cumple', 'no_cumple')]} |"
+        )
+        partes.append(
+            f"| Humano no cumple | {m[('no_cumple', 'cumple')]} | {m[('no_cumple', 'no_cumple')]} |"
+        )
+
+    partes.append("")
+    partes.append("## Ítems solo en una rúbrica")
+    partes.append("")
+    if resultado["solo_humano"] or resultado["solo_jev"]:
+        partes.append(f"- Solo en la rúbrica humana: {', '.join(resultado['solo_humano']) or 'ninguno'}")
+        partes.append(f"- Solo en la rúbrica de Jev: {', '.join(resultado['solo_jev']) or 'ninguno'}")
+    else:
+        partes.append("sin datos")
+
+    partes.append("")
+    partes.append("## Ids humanos sin resultado")
+    partes.append("")
     if resultado["ids_sin_resultado"]:
-        avisos.append(
-            f"- {len(resultado['ids_sin_resultado'])} ids humanos sin resultado de Jev: "
-            + ", ".join(f"`{i}`" for i in resultado["ids_sin_resultado"])
-        )
-    if resultado["ids_con_error_en_jev"]:
-        avisos.append(
-            f"- {len(resultado['ids_con_error_en_jev'])} ids que Jev no pudo auditar: "
-            + ", ".join(f"`{i}`" for i in resultado["ids_con_error_en_jev"])
-        )
-    if resultado["ids_solo_en_resultados"]:
-        avisos.append(
-            f"- {len(resultado['ids_solo_en_resultados'])} ids auditados por Jev sin auditoría humana (no cuentan)."
-        )
-    for sin in resultado["items_sin_comparar"]:
-        avisos.append(f"- Ítem `{sin['item']}` sin comparar: falta en el CSV {sin['falta_en']}.")
-    if resultado["etiquetas_invalidas"]:
-        avisos.append(
-            f"- {len(resultado['etiquetas_invalidas'])} etiquetas vacías o ilegibles, fuera del cálculo."
-        )
-    if avisos:
-        lineas += ["## Lo que quedó fuera", "", *avisos, ""]
+        for id_ in resultado["ids_sin_resultado"]:
+            partes.append(f"- {id_}")
+    else:
+        partes.append("sin datos")
+    partes.append("")
 
-    return "\n".join(lineas) + "\n"
-
-
-def resumen_consola(resultado: dict) -> str:
-    lineas = [
-        f"{resultado['interacciones_comparadas']} interacciones comparadas "
-        f"de {resultado['interacciones_humanas']} auditadas a mano.",
-        "",
-        f"{'Ítem':<24} {'n':>4} {'Acuerdo':>9} {'Kappa':>12}",
-    ]
-    for qid, m in resultado["items"].items():
-        lineas.append(f"{qid:<24} {m['n']:>4} {_pct(m['acuerdo']):>9} {_k(m['kappa']):>12}")
-    g = resultado["global"]
-    lineas.append(f"{'todos':<24} {g['n']:>4} {_pct(g['acuerdo']):>9} {_k(g['kappa']):>12}")
-    if resultado["ids_sin_resultado"] or resultado["ids_con_error_en_jev"]:
-        lineas.append(
-            f"\nSin comparar: {len(resultado['ids_sin_resultado'])} ids sin resultado, "
-            f"{len(resultado['ids_con_error_en_jev'])} con error en Jev."
-        )
-    for sin in resultado["items_sin_comparar"]:
-        lineas.append(f"Ítem {sin['item']} sin comparar: falta en el CSV {sin['falta_en']}.")
-    return "\n".join(lineas)
-
-
-def escribir(resultado: dict, ruta: str) -> str:
-    os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
-    with open(ruta, "w", encoding="utf-8", newline="\n") as archivo:
-        archivo.write(a_markdown(resultado))
-    return ruta
+    return "\n".join(partes)

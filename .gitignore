@@ -1,5 +1,6 @@
 __pycache__/
-*.pyc
-.venv/
-salidas/
-*.local.json
+data/eval/informe_fake.md
+# salidas de la prueba rápida del README
+resultados*.csv
+comparacion*.md
+informes/

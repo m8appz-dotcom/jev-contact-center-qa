@@ -1,380 +1,211 @@
-"""Rúbrica de auditoría: carga, petición a Jev y lectura tipada de la respuesta.
+"""Carga de rúbricas y traducción hacia/desde el formato de la API de Jev.
 
-Una interacción se evalúa con **una sola** petición a `POST /v1/systemone`: el
-texto viaja una vez en `state` y cada juicio es una pregunta tipada. Para una
-rúbrica de N ítems se envían N+2 preguntas: un Noul por ítem, más el Score
-`riesgo` y el Choice `motivo`.
-
-Referencia de la API: https://docs.typesafe.ai/api
+Una rúbrica describe una única petición al endpoint `systemone` de Jev por
+interacción: un ítem "noul" (sí/no) por cada elemento de `items`, más una
+pregunta "score" de riesgo (4 niveles) y una pregunta "choice" de motivo
+(con opción "otro").
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
 
-MODELO_POR_DEFECTO = "jev-latest"
+MODEL = "jev-latest"
 
-#: Ids reservados: son las dos preguntas que se añaden a los ítems de la rúbrica.
-ID_RIESGO = "riesgo"
-ID_MOTIVO = "motivo"
-IDS_RESERVADOS = (ID_RIESGO, ID_MOTIVO)
-
-#: La API acepta entre 2 y 10 niveles en un Score y hasta 255 opciones en un Choice.
-MIN_NIVELES, MAX_NIVELES = 2, 10
-MAX_OPCIONES = 255
-
-#: Toda rúbrica debe ofrecer una salida para lo que no encaja en ninguna categoría.
-OPCION_OTRO = "otro"
+# Ids reservados que toda rúbrica añade además de sus ítems.
+RIESGO_ID = "riesgo"
+MOTIVO_ID = "motivo"
 
 
-class ErrorRubrica(Exception):
-    """Base de los errores de este módulo."""
+class RubricError(Exception):
+    """La rúbrica no tiene el formato esperado."""
 
 
-class RubricaInvalida(ErrorRubrica):
-    """El archivo de rúbrica no cumple el formato esperado."""
+class RespuestaIncompletaError(Exception):
+    """La respuesta de Jev no contiene una respuesta para una pregunta esperada."""
 
+    def __init__(self, question_id: str):
+        self.question_id = question_id
+        super().__init__(f"falta la respuesta para la pregunta '{question_id}'")
 
-class RespuestaIncompleta(ErrorRubrica):
-    """Jev no devolvió una respuesta para alguna de las preguntas enviadas."""
-
-    def __init__(self, faltantes: list[str]) -> None:
-        self.faltantes = list(faltantes)
-        super().__init__("faltan respuestas para: " + ", ".join(self.faltantes))
-
-
-class RespuestaInvalida(ErrorRubrica):
-    """La respuesta llegó, pero no tiene la forma que documenta la API."""
-
-
-# ---------------------------------------------------------------------------
-# Carga de la rúbrica
-# ---------------------------------------------------------------------------
 
 def load_rubric(path: str) -> dict:
-    """Lee y valida un archivo JSON de rúbrica.
+    """Carga y valida una rúbrica JSON desde `path`."""
+    with open(path, "r", encoding="utf-8") as f:
+        rubric = json.load(f)
 
-    Devuelve un diccionario normalizado con `items`, `riesgo` y `motivo`. Lanza
-    `RubricaInvalida` con un mensaje concreto si algo no cuadra.
-    """
-    try:
-        with open(path, encoding="utf-8") as archivo:
-            crudo = json.load(archivo)
-    except FileNotFoundError as exc:
-        raise RubricaInvalida(f"no existe la rúbrica {path}") from exc
-    except json.JSONDecodeError as exc:
-        raise RubricaInvalida(f"{path} no es JSON válido: {exc}") from exc
+    if not isinstance(rubric, dict):
+        raise RubricError("la rúbrica debe ser un objeto JSON")
 
-    if not isinstance(crudo, dict):
-        raise RubricaInvalida(f"{path}: la rúbrica debe ser un objeto JSON")
+    items = rubric.get("items")
+    if not isinstance(items, list) or not items:
+        raise RubricError("la rúbrica debe tener al menos un ítem en 'items'")
 
-    return {
-        "id": _texto(crudo.get("id"), "id", contexto=path),
-        "nombre": crudo.get("nombre") or crudo.get("id"),
-        "version": str(crudo.get("version", "0")),
-        "idioma": crudo.get("idioma", "es"),
-        "items": _validar_items(crudo.get("items"), path),
-        "riesgo": _validar_riesgo(crudo.get("riesgo"), path),
-        "motivo": _validar_motivo(crudo.get("motivo"), path),
-        "umbrales": _validar_umbrales(crudo.get("umbrales"), path),
-        "ruta": path,
-    }
-
-
-def _texto(valor: Any, campo: str, *, contexto: str) -> str:
-    if not isinstance(valor, str) or not valor.strip():
-        raise RubricaInvalida(f"{contexto}: {campo} debe ser un texto no vacío")
-    return valor.strip()
-
-
-def _criterios(valor: Any, contexto: str) -> dict | None:
-    if valor is None:
-        return None
-    if not isinstance(valor, dict):
-        raise RubricaInvalida(f"{contexto}: criterios debe ser un objeto")
-    sobran = set(valor) - {"true", "false"}
-    if sobran:
-        raise RubricaInvalida(
-            f"{contexto}: criterios solo admite true y false; sobra: "
-            + ", ".join(sorted(sobran))
-        )
-    return {clave: valor[clave] for clave in ("true", "false") if clave in valor}
-
-
-def _validar_items(valor: Any, contexto: str) -> list[dict]:
-    if not isinstance(valor, list) or not valor:
-        raise RubricaInvalida(
-            f"{contexto}: items debe ser una lista con al menos un ítem"
-        )
-
-    items: list[dict] = []
-    vistos: set[str] = set()
-    for posicion, crudo in enumerate(valor):
-        donde = f"{contexto}: items[{posicion}]"
-        if not isinstance(crudo, dict):
-            raise RubricaInvalida(f"{donde} debe ser un objeto")
-        item_id = _texto(crudo.get("id"), "id", contexto=donde)
-        if item_id in IDS_RESERVADOS:
-            raise RubricaInvalida(
-                f"{donde}: {item_id} es un id reservado para la pregunta de "
-                f"{item_id}; usa otro id"
+    seen_ids = set()
+    for item in items:
+        if not isinstance(item, dict):
+            raise RubricError(f"cada ítem debe ser un objeto: {item!r}")
+        for field in ("id", "pregunta", "peso", "critico"):
+            if field not in item:
+                raise RubricError(f"ítem sin campo requerido '{field}': {item}")
+        item_id = item["id"]
+        if not isinstance(item_id, str) or not item_id:
+            raise RubricError(f"el id del ítem debe ser una cadena no vacía: {item!r}")
+        if item_id in (RIESGO_ID, MOTIVO_ID):
+            raise RubricError(
+                f"el id de ítem '{item_id}' está reservado para 'riesgo'/'motivo'"
             )
-        if item_id in vistos:
-            raise RubricaInvalida(f"{donde}: el id {item_id} está repetido")
-        vistos.add(item_id)
+        if item_id in seen_ids:
+            raise RubricError(f"id de ítem duplicado: '{item_id}'")
+        seen_ids.add(item_id)
 
-        peso = crudo.get("peso", 1)
-        if isinstance(peso, bool) or not isinstance(peso, (int, float)) or peso <= 0:
-            raise RubricaInvalida(f"{donde}: peso debe ser un número mayor que cero")
-        critico = crudo.get("critico", False)
-        if not isinstance(critico, bool):
-            raise RubricaInvalida(f"{donde}: critico debe ser true o false")
+    riesgo = rubric.get("riesgo")
+    if not isinstance(riesgo, dict) or "pregunta" not in riesgo or "niveles" not in riesgo:
+        raise RubricError("la rúbrica debe tener 'riesgo' con 'pregunta' y 'niveles'")
+    if not isinstance(riesgo["niveles"], list) or len(riesgo["niveles"]) != 4:
+        raise RubricError("'riesgo' debe tener exactamente 4 niveles")
 
-        items.append(
-            {
-                "id": item_id,
-                "pregunta": _texto(crudo.get("pregunta"), "pregunta", contexto=donde),
-                "criterios": _criterios(crudo.get("criterios"), donde),
-                "peso": peso,
-                "critico": critico,
-            }
-        )
-    return items
+    motivo = rubric.get("motivo")
+    if not isinstance(motivo, dict) or "pregunta" not in motivo or "opciones" not in motivo:
+        raise RubricError("la rúbrica debe tener 'motivo' con 'pregunta' y 'opciones'")
+    if not isinstance(motivo["opciones"], dict):
+        raise RubricError("'motivo.opciones' debe ser un objeto")
+    if "otro" not in motivo["opciones"]:
+        raise RubricError("'motivo' debe incluir la opción 'otro'")
+
+    return rubric
 
 
-def _validar_riesgo(valor: Any, contexto: str) -> dict:
-    donde = f"{contexto}: riesgo"
-    if not isinstance(valor, dict):
-        raise RubricaInvalida(f"{donde} debe ser un objeto con pregunta y niveles")
-    niveles = valor.get("niveles")
-    if not isinstance(niveles, list) or not all(
-        isinstance(nivel, str) and nivel.strip() for nivel in niveles
-    ):
-        raise RubricaInvalida(f"{donde}: niveles debe ser una lista de textos")
-    if not MIN_NIVELES <= len(niveles) <= MAX_NIVELES:
-        raise RubricaInvalida(
-            f"{donde}: la API admite entre {MIN_NIVELES} y {MAX_NIVELES} niveles, "
-            f"hay {len(niveles)}"
-        )
-    return {
-        "pregunta": _texto(valor.get("pregunta"), "pregunta", contexto=donde),
-        "niveles": list(niveles),
-    }
+def build_request(rubric: dict, text: str) -> dict:
+    """Construye el cuerpo de la petición a Jev para una interacción.
 
-
-def _validar_motivo(valor: Any, contexto: str) -> dict:
-    donde = f"{contexto}: motivo"
-    if not isinstance(valor, dict):
-        raise RubricaInvalida(f"{donde} debe ser un objeto con pregunta y opciones")
-    opciones = valor.get("opciones")
-    if not isinstance(opciones, dict) or len(opciones) < 2:
-        raise RubricaInvalida(
-            f"{donde}: opciones debe ser un objeto con al menos dos opciones"
-        )
-    if len(opciones) > MAX_OPCIONES:
-        raise RubricaInvalida(f"{donde}: la API admite hasta {MAX_OPCIONES} opciones")
-    if OPCION_OTRO not in opciones:
-        raise RubricaInvalida(
-            f"{donde}: falta la opción {OPCION_OTRO}; sin ella el modelo tiene que "
-            "forzar una categoría cuando ninguna encaja"
-        )
-    return {
-        "pregunta": _texto(valor.get("pregunta"), "pregunta", contexto=donde),
-        "opciones": dict(opciones),
-    }
-
-
-def _validar_umbrales(valor: Any, contexto: str) -> dict:
-    """Umbrales de la fase 5. Se transportan tal cual; `scoring` pone los suyos.
-
-    Aquí solo se comprueba que sean números: qué significa cada uno y cuál es
-    su valor por defecto es cosa de `jevqa.scoring`, que es quien puntúa.
+    El texto de la interacción se envía una sola vez en `state`. `questions`
+    contiene un Noul por ítem de la rúbrica más las preguntas `riesgo` y
+    `motivo`: exactamente N + 2 preguntas para N ítems.
     """
-    if valor is None:
-        return {}
-    donde = f"{contexto}: umbrales"
-    if not isinstance(valor, dict):
-        raise RubricaInvalida(f"{donde} debe ser un objeto")
-    umbrales = {}
-    for clave, numero in valor.items():
-        if isinstance(numero, bool) or not isinstance(numero, (int, float)):
-            raise RubricaInvalida(f"{donde}: {clave} debe ser un número")
-        umbrales[str(clave)] = float(numero)
-    return umbrales
-
-
-# ---------------------------------------------------------------------------
-# Construcción de la petición
-# ---------------------------------------------------------------------------
-
-def build_request(rubric: dict, text: str, modelo: str = MODELO_POR_DEFECTO) -> dict:
-    """Arma el cuerpo de la petición: el texto una vez en `state`, N+2 preguntas.
-
-    El texto de la interacción no se repite dentro de las preguntas. Jev lee el
-    `state` una sola vez y evalúa todas las preguntas contra él en paralelo, así
-    que repetirlo solo costaría tokens y precisión.
-    """
-    if not isinstance(text, str) or not text.strip():
-        raise RubricaInvalida("el texto de la interacción está vacío")
-
-    preguntas: dict[str, dict] = {}
+    questions = {}
     for item in rubric["items"]:
-        pregunta = {"type": "noul", "instructions": item["pregunta"]}
-        if item["criterios"]:
-            pregunta["criteria"] = item["criterios"]
-        preguntas[item["id"]] = pregunta
+        questions[item["id"]] = {
+            "type": "noul",
+            "instructions": item["pregunta"],
+        }
 
-    preguntas[ID_RIESGO] = {
+    questions[RIESGO_ID] = {
         "type": "score",
         "instructions": rubric["riesgo"]["pregunta"],
-        "criteria": list(rubric["riesgo"]["niveles"]),
+        "criteria": rubric["riesgo"]["niveles"],
     }
-    preguntas[ID_MOTIVO] = {
+
+    questions[MOTIVO_ID] = {
         "type": "choice",
         "instructions": rubric["motivo"]["pregunta"],
-        "criteria": dict(rubric["motivo"]["opciones"]),
+        "criteria": rubric["motivo"]["opciones"],
     }
 
-    return {"state": text, "model": modelo, "questions": preguntas}
-
-
-def ids_esperados(rubric: dict) -> list[str]:
-    """Los N+2 ids de pregunta que se envían y que deben volver en la respuesta."""
-    return [item["id"] for item in rubric["items"]] + [ID_RIESGO, ID_MOTIVO]
-
-
-# ---------------------------------------------------------------------------
-# Lectura de la respuesta
-# ---------------------------------------------------------------------------
-
-def parse_answer(tipo: str, respuesta: Any, *, niveles: list[str] | None = None) -> dict:
-    """Normaliza una respuesta de la API a un registro con la misma forma.
-
-    Todos los tipos devuelven `valor`, `probabilidad`, `confianza` y
-    `distribucion`. Un Score añade `nivel`, `etiqueta` y `leyenda`.
-
-    La API no devuelve `confidence` para un Noul: el propio valor ya describe
-    toda la distribución. Aquí se deriva con la misma fórmula que la
-    documentación usa para una distribución de dos resultados,
-    2·max(p, 1−p) − 1, para poder aplicar un único umbral de confianza a todas
-    las preguntas.
-    """
-    if not isinstance(respuesta, dict):
-        raise RespuestaInvalida(f"la respuesta de tipo {tipo} no es un objeto")
-    devuelto = respuesta.get("type")
-    if devuelto is not None and devuelto != tipo:
-        raise RespuestaInvalida(
-            f"se esperaba una respuesta {tipo} y llegó {devuelto}"
+    request = {
+        "state": text,
+        "model": MODEL,
+        "questions": questions,
+    }
+    # `load_rubric` ya rechaza ids duplicados/reservados, pero se comprueba de
+    # nuevo aquí para que el invariante N+2 nunca se rompa en silencio, ni
+    # siquiera con una rúbrica construida a mano sin pasar por `load_rubric`.
+    if len(questions) != len(rubric["items"]) + 2:
+        raise RubricError(
+            "la rúbrica tiene ids de pregunta duplicados o reservados: "
+            "se esperaban exactamente N+2 preguntas"
         )
-
-    if tipo == "noul":
-        probabilidad = _numero(respuesta.get("noul"), "noul")
-        return {
-            "tipo": "noul",
-            "valor": probabilidad,
-            "probabilidad": probabilidad,
-            "confianza": abs(2.0 * probabilidad - 1.0),
-            "distribucion": {"si": probabilidad, "no": 1.0 - probabilidad},
-        }
-
-    if tipo == "choice":
-        opcion = respuesta.get("choice")
-        if not isinstance(opcion, str):
-            raise RespuestaInvalida("falta choice en la respuesta")
-        distribucion = _distribucion(respuesta.get("probabilities"))
-        return {
-            "tipo": "choice",
-            "valor": opcion,
-            "probabilidad": distribucion.get(opcion, 0.0),
-            "confianza": _numero(respuesta.get("confidence"), "confidence"),
-            "distribucion": distribucion,
-        }
-
-    if tipo == "score":
-        valor = _numero(respuesta.get("score"), "score")
-        distribucion = _distribucion(respuesta.get("probabilities"))
-        leyenda = respuesta.get("legend")
-        if not isinstance(leyenda, dict):
-            if niveles is None:
-                raise RespuestaInvalida("falta legend en la respuesta de score")
-            leyenda = {str(i): texto for i, texto in enumerate(niveles)}
-        nivel = max(distribucion, key=lambda clave: distribucion[clave])
-        return {
-            "tipo": "score",
-            "valor": valor,
-            "nivel": int(nivel),
-            "etiqueta": leyenda.get(nivel, nivel),
-            "probabilidad": distribucion[nivel],
-            "confianza": _numero(respuesta.get("confidence"), "confidence"),
-            "distribucion": distribucion,
-            "leyenda": {str(clave): texto for clave, texto in leyenda.items()},
-        }
-
-    raise RespuestaInvalida(f"tipo de pregunta desconocido: {tipo}")
+    return request
 
 
-def parse_response(rubric: dict, data: Any) -> dict:
-    """Convierte la respuesta de Jev en un resultado tipado para esta rúbrica.
+def _expected_question_ids(rubric: dict) -> list:
+    return [item["id"] for item in rubric["items"]] + [RIESGO_ID, MOTIVO_ID]
 
-    Lanza `RespuestaIncompleta` si falta la respuesta de alguna pregunta: sin
-    todos los ítems no se puede calcular una nota, así que el fallo es duro y no
-    se rellena nada por omisión.
+
+def _expected_answer_type(question_id: str) -> str:
+    """Tipo de respuesta esperado para `question_id` según la rúbrica.
+
+    Viene de la posición del id (ítem -> noul, riesgo -> score, motivo ->
+    choice), no del campo `type` de la respuesta.
     """
-    if not isinstance(data, dict):
-        raise RespuestaInvalida("la respuesta no es un objeto JSON")
-    respuestas_api = data.get("answers")
-    if not isinstance(respuestas_api, dict):
-        raise RespuestaInvalida("la respuesta no trae el objeto answers")
-
-    faltantes = [qid for qid in ids_esperados(rubric) if qid not in respuestas_api]
-    if faltantes:
-        raise RespuestaIncompleta(faltantes)
-
-    items: dict[str, dict] = {}
-    for item in rubric["items"]:
-        registro = parse_answer("noul", respuestas_api[item["id"]])
-        registro["peso"] = item["peso"]
-        registro["critico"] = item["critico"]
-        items[item["id"]] = registro
-
-    riesgo = parse_answer(
-        "score", respuestas_api[ID_RIESGO], niveles=rubric["riesgo"]["niveles"]
-    )
-    motivo = parse_answer("choice", respuestas_api[ID_MOTIVO])
-
-    respuestas = dict(items)
-    respuestas[ID_RIESGO] = riesgo
-    respuestas[ID_MOTIVO] = motivo
-
-    return {
-        "rubrica": rubric["id"],
-        "version_rubrica": rubric["version"],
-        "modelo": data.get("model"),
-        "items": items,
-        "riesgo": riesgo,
-        "motivo": motivo,
-        "respuestas": respuestas,
-        "uso": _uso(data.get("usage")),
-    }
+    if question_id == RIESGO_ID:
+        return "score"
+    if question_id == MOTIVO_ID:
+        return "choice"
+    return "noul"
 
 
-def _numero(valor: Any, campo: str) -> float:
-    if isinstance(valor, bool) or not isinstance(valor, (int, float)):
-        raise RespuestaInvalida(f"{campo} debe ser un número, llegó {valor!r}")
-    return float(valor)
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def _distribucion(valor: Any) -> dict[str, float]:
-    if not isinstance(valor, dict) or not valor:
-        raise RespuestaInvalida("falta probabilities en la respuesta")
-    return {str(clave): _numero(prob, "probabilities") for clave, prob in valor.items()}
+def _parse_answer(question_id: str, expected_type: str, answer) -> dict:
+    """Convierte una respuesta cruda de Jev en un resultado tipado.
+
+    `expected_type` viene de la rúbrica; el campo `type` de la respuesta, si
+    está presente, solo se usa como comprobación de consistencia. Conserva
+    todos los campos originales de la respuesta (sin pérdida) y añade claves
+    normalizadas: `probabilidad`, y para score/choice también `confianza` y
+    `distribucion`. Cualquier campo ausente o mal formado lanza
+    `RespuestaIncompletaError`, nunca `KeyError`/`TypeError`.
+    """
+    if not isinstance(answer, dict):
+        raise RespuestaIncompletaError(question_id)
+
+    answer_type = answer.get("type")
+    if answer_type is not None and answer_type != expected_type:
+        raise RespuestaIncompletaError(question_id)
+
+    result = dict(answer)
+
+    if expected_type == "noul":
+        noul = answer.get("noul")
+        if not _is_number(noul):
+            raise RespuestaIncompletaError(question_id)
+        result["probabilidad"] = noul
+    elif expected_type == "score":
+        score = answer.get("score")
+        confidence = answer.get("confidence")
+        probabilities = answer.get("probabilities")
+        if not _is_number(score) or not _is_number(confidence) or not isinstance(
+            probabilities, dict
+        ):
+            raise RespuestaIncompletaError(question_id)
+        result["probabilidad"] = score
+        result["confianza"] = confidence
+        result["distribucion"] = probabilities
+    else:  # choice
+        choice = answer.get("choice")
+        confidence = answer.get("confidence")
+        probabilities = answer.get("probabilities")
+        if (
+            not isinstance(choice, str)
+            or not _is_number(confidence)
+            or not isinstance(probabilities, dict)
+            or choice not in probabilities
+        ):
+            raise RespuestaIncompletaError(question_id)
+        result["probabilidad"] = probabilities.get(choice)
+        result["confianza"] = confidence
+        result["distribucion"] = probabilities
+
+    return result
 
 
-def _uso(valor: Any) -> dict[str, int]:
-    if not isinstance(valor, dict):
-        return {"tokens_entrada": 0, "tokens_salida": 0}
-    return {
-        "tokens_entrada": int(valor.get("input_tokens") or 0),
-        "tokens_salida": int(valor.get("output_tokens") or 0),
-    }
+def parse_response(rubric: dict, data: dict) -> dict:
+    """Convierte la respuesta cruda de Jev en un resultado tipado por pregunta.
+
+    Lanza `RespuestaIncompletaError` si falta la respuesta a alguna de las
+    preguntas esperadas para la rúbrica, o si alguna respuesta presente tiene
+    un campo ausente o mal formado.
+    """
+    answers = data.get("answers") if isinstance(data, dict) else None
+    if not isinstance(answers, dict):
+        raise RespuestaIncompletaError("answers")
+    result = {}
+    for question_id in _expected_question_ids(rubric):
+        if question_id not in answers:
+            raise RespuestaIncompletaError(question_id)
+        expected_type = _expected_answer_type(question_id)
+        result[question_id] = _parse_answer(question_id, expected_type, answers[question_id])
+    return result

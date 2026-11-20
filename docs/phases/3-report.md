@@ -1,0 +1,6 @@
+# Fase 3 — Anonimizador (ley de datos de Ecuador)
+- Qué cambió: `jevqa/anonymize.py` (`anonymize(text, names=[])` y `restore(text, names)`), `tests/test_anonymize.py` (25 tests).
+- Detecta: correos; RUC (persona natural o sociedad 6/9, provincia válida); tarjetas con Luhn (seguidas, 4-4-4-x o Amex 4-6-5); cédula con verificador módulo 10 (con o sin guion); móviles 09…, fijos 02–07, +593/00593; nombres de las columnas (completos y por partes ≥ 3 letras, sin partículas), sin distinguir mayúsculas ni tildes, también en texto NFD. Los nombres pasan a `[NOMBRE_n]` (posición en `names`), reversible solo en memoria con `restore`.
+- Comando: `python -m unittest tests.test_anonymize -v` → 25 tests, 0 fallos; suite completa 102 tests, 0 fallos.
+- Resultado: 40 interacciones sintéticas con cédula, RUC, tarjeta, móvil (3 formatos), fijo, correo y nombres sembrados → 0 fugas, 0 importes/fechas/pedidos tapados. Comprobado por mutación: sin el patrón de móviles el test falla.
+- Límites conocidos (para el README de la fase 7): nombres propios fuera de columnas se escapan (test lo documenta); apellidos que son palabra común ("Peña"/"pena") se tapan también como palabra; teléfono local de 7 dígitos sin prefijo no se tapa (se confundiría con códigos); una fecha escrita con espacios "05 03 2024" puede tomarse por teléfono fijo.

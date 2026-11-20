@@ -1,0 +1,7 @@
+# Fase 5 — Nota, umbrales y cola de revisión
+- Qué cambió: `jevqa/scoring.py` (`umbrales_de`, `puntuar`, `puntuar_lote`, `agregar`, `ScoringError`), `tests/test_scoring.py` (30 tests). Sin I/O ni CLI: consume las filas del CSV auditado de la fase 4.
+- Diseño: cumple si p ≥ 0,5; nota = 100·Σpeso(cumple)/Σpeso a un decimal; suspenso si falla un crítico o nota < `aprobado` (la nota no se altera). Revisión si algún ítem tiene confianza |2p−1| < `confianza` o p ∈ [`dudosa_min`, `dudosa_max`] (inclusive). Agregados por `agente`/`campaña`: n, sin_nota, nota_media (None si n = 0), % con crítico fallido, cola. Solo se puntúan filas `ok`.
+- Umbrales: por defecto confianza 0,7 (informe fase 2), banda 0,35–0,65 (plan), aprobado 70; sobrescribibles con la clave opcional `umbrales` de la rúbrica, validados (clave desconocida, no numérico/bool, rango, min > max → `ScoringError`).
+- Revisión (corregido en la fase): un peso `inf` daba nota NaN → ahora `ScoringError`; comentario de defaults corregido (aprobado no sale del informe).
+- Comando: `python -m unittest tests.test_scoring -v` → 30 tests, 0 fallos; suite completa 151 tests, 0 fallos.
+- Riesgo: `aprobado` = 70 es una decisión de producto sin medir; con confianza 0,7 la banda 0,35–0,65 queda subsumida (p ∈ (0,15, 0,85) ya va a revisión), así que la cola puede ser grande — calibrar en el piloto. nota_media promedia notas redondeadas (error ≤ 0,05).

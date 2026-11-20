@@ -1,534 +1,501 @@
-#!/usr/bin/env python
-"""Mide cuánto coincide Jev con las etiquetas humanas en español.
+"""Evalúa qué tan bien coincide Jev con etiquetas humanas en español.
 
-Evalúa las interacciones sintéticas de `data/eval/sinteticas.csv` con una
-petición por interacción y compara el resultado, ítem por ítem, con la
-etiqueta que pusimos a mano. Escribe `data/eval/informe.md`.
+Lee `data/eval/sinteticas.csv`, envía cada interacción a Jev (o a un doble
+sin red en modo `--fake`) usando `rubrics/soporte_es.json`, y escribe un
+informe con métricas por ítem, coste real y los peores desacuerdos.
 
-    python scripts/eval_jev.py --fake     # sin red, sin coste
-    python scripts/eval_jev.py            # en vivo, con TYPESAFE_API_KEY
+En modo `--fake` el informe se escribe en `data/eval/informe_fake.md` (nunca
+pisa el informe real). En vivo se escribe en `data/eval/informe.md`.
 
-El objetivo es decidir antes de construir nada más: si algún ítem baja del
-85 % de acuerdo, hay que reformularlo, traducirlo o quitarlo.
+Las funciones de métricas son puras y no dependen de red ni de E/S, para
+poder testearlas por separado (ver `tests/test_eval_metrics.py`).
+
+Códigos de salida de `main()`:
+    0 = todas las filas se evaluaron y todos los ítems tienen acuerdo >= 85 %.
+    2 = el CSV de entrada no es válido (columna de ítem faltante, etiqueta
+        que no es 0/1, o id duplicado).
+    3 = modo en vivo sin credenciales válidas (falta TYPESAFE_API_KEY o la
+        API respondió 401): se aborta antes de escribir ningún informe.
+    4 = una o más filas fallaron al evaluarse (no se completó el 100 %).
+    5 = todas las filas se evaluaron, pero algún ítem quedó por debajo del
+        85 % de acuerdo (punto de decisión de la Fase 2).
 """
 
 from __future__ import annotations
 
-import argparse
 import csv
-import datetime
+import hashlib
 import os
 import sys
-from typing import Iterable
+from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from jevqa.anonymize import anonymize  # noqa: E402
-from jevqa.jev_client import ErrorJev, FakeJev, JevClient, coste_usd  # noqa: E402
-from jevqa.rubric import (  # noqa: E402
-    ErrorRubrica,
-    build_request,
-    load_rubric,
-    parse_response,
-)
+from jevqa import rubric as rubric_mod
+from jevqa.jev_client import JevAuthError, JevClient, JevError
 
-RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RUBRICA = os.path.join(RAIZ, "rubrics", "soporte_es.json")
-DATOS = os.path.join(RAIZ, "data", "eval", "sinteticas.csv")
-INFORME = os.path.join(RAIZ, "data", "eval", "informe.md")
+REPO_ROOT = os.path.join(os.path.dirname(__file__), "..")
+RUBRIC_PATH = os.path.join(REPO_ROOT, "rubrics", "soporte_es.json")
+CSV_PATH = os.path.join(REPO_ROOT, "data", "eval", "sinteticas.csv")
+INFORME_PATH = os.path.join(REPO_ROOT, "data", "eval", "informe.md")
+INFORME_FAKE_PATH = os.path.join(REPO_ROOT, "data", "eval", "informe_fake.md")
 
-#: Un noul por encima de este valor se lee como "cumple".
-UMBRAL = 0.5
-#: Por debajo de esta confianza la respuesta no se considera firme.
-UMBRAL_CONFIANZA = 0.7
-#: Umbral de decisión del plan: por debajo, el ítem no sirve como está.
-ACUERDO_MINIMO = 0.85
+CONFIANZA_MINIMA = 0.7
+UMBRAL_DECISION = 0.85
+PRECIO_ENTRADA_POR_MILLON = 0.042  # USD por millón de tokens de entrada; salida no se factura.
 
-#: Exhaustividad por debajo de la cual el ítem se señala aparte. El acuerdo
-#: puede ser altísimo y la exhaustividad pésima cuando el "no cumple" es raro:
-#: un ítem que dice "cumple" siempre acierta el 95 % de las veces y no detecta
-#: ni una falla. Para una auditoría, eso es inservible.
-EXHAUSTIVIDAD_MINIMA = 0.5
-
-ETIQUETA_CUMPLE = "cumple"
-ETIQUETA_NO = "no"
+EXIT_OK = 0
+EXIT_CSV_INVALIDO = 2
+EXIT_AUTH_ERROR = 3
+EXIT_FILAS_FALLIDAS = 4
+EXIT_DEBAJO_UMBRAL = 5
 
 
-# ---------------------------------------------------------------------------
-# Métricas
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# Métricas puras
+# --------------------------------------------------------------------------
 
-def metricas_item(
-    observaciones: Iterable[tuple[bool, float, float]],
-    *,
-    umbral: float = UMBRAL,
-    umbral_confianza: float = UMBRAL_CONFIANZA,
-) -> dict:
-    """Compara las respuestas de Jev con las etiquetas humanas de un ítem.
+def confianza_de(probabilidad: float) -> float:
+    """Confianza de un Noul: |2p - 1|.
 
-    Cada observación es `(humano_cumple, probabilidad, confianza)`. La clase
-    positiva es el "no cumple", que es lo que le interesa a una auditoría:
-    detectar la falla, no confirmar el acierto.
-
-    Las razones que no están definidas valen `None` en lugar de cero: un ítem
-    sin ningún "no cumple" no tiene precisión del 0 %, no tiene precisión.
+    0 cuando p = 0,5 (máxima incertidumbre), 1 cuando p = 0 o p = 1 (máxima
+    certeza). Es la misma escala que `confidence` de las preguntas Choice y
+    Score de Jev, para que el umbral `CONFIANZA_MINIMA` sea comparable.
     """
-    observaciones = list(observaciones)
-    total = len(observaciones)
-    if total == 0:
-        return {
-            "n": 0,
-            "acuerdos": 0,
-            "acuerdo": None,
-            "no_cumple_humano": 0,
-            "no_cumple_jev": 0,
-            "aciertos_no_cumple": 0,
-            "precision_no_cumple": None,
-            "exhaustividad_no_cumple": None,
-            "n_confiables": 0,
-            "acuerdo_confiables": None,
-        }
+    return abs(2 * probabilidad - 1)
 
-    acuerdos = 0
-    no_humano = no_jev = aciertos = 0
-    confiables = acuerdos_confiables = 0
 
-    for humano_cumple, probabilidad, confianza in observaciones:
-        jev_cumple = probabilidad >= umbral
-        coinciden = jev_cumple == humano_cumple
-        acuerdos += coinciden
-        no_humano += not humano_cumple
-        no_jev += not jev_cumple
-        aciertos += (not humano_cumple) and (not jev_cumple)
-        if confianza >= umbral_confianza:
-            confiables += 1
-            acuerdos_confiables += coinciden
+def prediccion_de(probabilidad: float) -> int:
+    """Decisión "cumple" (1) / "no cumple" (0) con umbral 0,5."""
+    return 1 if probabilidad >= 0.5 else 0
+
+
+def item_metrics(records: list[dict]) -> dict:
+    """Calcula métricas de un ítem a partir de sus registros por fila.
+
+    Cada registro es `{"etiqueta": 0|1, "prediccion": 0|1, "confianza": float}`.
+    Devuelve `None` en cualquier métrica cuyo denominador sea 0, en vez de
+    dividir por cero.
+    """
+    n = len(records)
+    acuerdo = (
+        sum(1 for r in records if r["etiqueta"] == r["prediccion"]) / n
+        if n
+        else None
+    )
+
+    predichos_no_cumple = [r for r in records if r["prediccion"] == 0]
+    precision_no_cumple = (
+        sum(1 for r in predichos_no_cumple if r["etiqueta"] == 0) / len(predichos_no_cumple)
+        if predichos_no_cumple
+        else None
+    )
+
+    reales_no_cumple = [r for r in records if r["etiqueta"] == 0]
+    exhaustividad_no_cumple = (
+        sum(1 for r in reales_no_cumple if r["prediccion"] == 0) / len(reales_no_cumple)
+        if reales_no_cumple
+        else None
+    )
+
+    alta_confianza = [r for r in records if r["confianza"] >= CONFIANZA_MINIMA]
+    acuerdo_alta_confianza = (
+        sum(1 for r in alta_confianza if r["etiqueta"] == r["prediccion"]) / len(alta_confianza)
+        if alta_confianza
+        else None
+    )
 
     return {
-        "n": total,
-        "acuerdos": acuerdos,
-        "acuerdo": acuerdos / total,
-        "no_cumple_humano": no_humano,
-        "no_cumple_jev": no_jev,
-        "aciertos_no_cumple": aciertos,
-        "precision_no_cumple": (aciertos / no_jev) if no_jev else None,
-        "exhaustividad_no_cumple": (aciertos / no_humano) if no_humano else None,
-        "n_confiables": confiables,
-        "acuerdo_confiables": (acuerdos_confiables / confiables) if confiables else None,
+        "n": n,
+        "n_alta_confianza": len(alta_confianza),
+        "acuerdo": acuerdo,
+        "precision_no_cumple": precision_no_cumple,
+        "exhaustividad_no_cumple": exhaustividad_no_cumple,
+        "acuerdo_alta_confianza": acuerdo_alta_confianza,
     }
 
 
-def metricas_por_item(rubrica: dict, evaluaciones: list[dict], **opciones) -> dict:
-    """Aplica `metricas_item` a cada ítem de la rúbrica."""
-    return {
-        item["id"]: metricas_item(
-            (
-                (
-                    ev["etiquetas"][item["id"]],
-                    ev["resultado"]["items"][item["id"]]["probabilidad"],
-                    ev["resultado"]["items"][item["id"]]["confianza"],
-                )
-                for ev in evaluaciones
-                if ev["resultado"] is not None and item["id"] in ev["etiquetas"]
-            ),
-            **opciones,
-        )
-        for item in rubrica["items"]
-    }
+def peores_desacuerdos(entradas: list[dict], top: int = 5) -> list[dict]:
+    """Las `top` entradas con mayor |probabilidad - etiqueta|, solo desacuerdos reales.
 
-
-def fallas_no_detectadas(
-    rubrica: dict, evaluaciones: list[dict], item_id: str, *, umbral: float = UMBRAL
-) -> list[tuple[str, float]]:
-    """Las fallas reales que Jev dejó pasar, con el noul que les dio.
-
-    El mayor de esos valores es el umbral que la fase 5 tendría que superar
-    para detectarlas todas; lo que cueste en falsos positivos se ve en la
-    columna de precisión.
+    Un desacuerdo real es aquel donde `prediccion != etiqueta`; las entradas
+    donde Jev acertó (aunque con baja confianza) no cuentan como desacuerdo y
+    se descartan. Si no hay ninguna, devuelve una lista vacía. Cada entrada es
+    `{"id":, "item":, "etiqueta":, "prediccion":, "probabilidad":, "texto":}`.
     """
-    perdidas = []
-    for ev in evaluaciones:
-        if ev["resultado"] is None or ev["etiquetas"].get(item_id) is not False:
-            continue
-        probabilidad = ev["resultado"]["items"][item_id]["probabilidad"]
-        if probabilidad >= umbral:
-            perdidas.append((ev["id"], probabilidad))
-    return sorted(perdidas, key=lambda par: par[1], reverse=True)
+    desacuerdos = [e for e in entradas if e["prediccion"] != e["etiqueta"]]
+    return sorted(
+        desacuerdos, key=lambda e: abs(e["probabilidad"] - e["etiqueta"]), reverse=True
+    )[:top]
 
 
-def peores_desacuerdos(
-    rubrica: dict, evaluaciones: list[dict], *, cuantos: int = 5, umbral: float = UMBRAL
-) -> list[dict]:
-    """Los desacuerdos en los que Jev estuvo más seguro de lo contrario."""
-    desacuerdos = []
-    for ev in evaluaciones:
-        if ev["resultado"] is None:
-            continue
-        for item in rubrica["items"]:
-            registro = ev["resultado"]["items"][item["id"]]
-            humano_cumple = ev["etiquetas"].get(item["id"])
-            if humano_cumple is None:
-                continue
-            if (registro["probabilidad"] >= umbral) == humano_cumple:
-                continue
-            desacuerdos.append(
+def costo_dolares(tokens_entrada: int) -> float:
+    """Coste real en USD: solo se facturan los tokens de entrada.
+
+    Los tokens de salida son gratis en la API de Jev, así que no entran en
+    el cálculo (ver `PRECIO_ENTRADA_POR_MILLON`).
+    """
+    return tokens_entrada * PRECIO_ENTRADA_POR_MILLON / 1_000_000
+
+
+# --------------------------------------------------------------------------
+# Datos y ejecución
+# --------------------------------------------------------------------------
+
+class CsvValidationError(Exception):
+    """El CSV de entrada no tiene el formato esperado (columna, fila y motivo)."""
+
+    def __init__(self, fila: int, columna: str, mensaje: str):
+        self.fila = fila
+        self.columna = columna
+        super().__init__(f"fila {fila}, columna '{columna}': {mensaje}")
+
+
+def item_ids(rubric: dict) -> list[str]:
+    return [item["id"] for item in rubric["items"]]
+
+
+def read_synthetic_csv(path: str, ids: list[str]) -> list[dict]:
+    """Lee `sinteticas.csv`: cada fila trae id, texto y una etiqueta 0/1 por ítem.
+
+    Valida, fila por fila: que exista la columna de cada ítem, que la
+    etiqueta sea '0' o '1' (una celda vacía no es válida), y que el id no
+    esté repetido. Cualquier problema lanza `CsvValidationError` nombrando
+    la fila y la columna.
+    """
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = []
+        seen_ids: set[str] = set()
+        for numero_fila, row in enumerate(reader, start=2):
+            row_id = row.get("id")
+            if row_id in seen_ids:
+                raise CsvValidationError(numero_fila, "id", f"id duplicado: '{row_id}'")
+            seen_ids.add(row_id)
+
+            etiquetas = {}
+            for item_id in ids:
+                if item_id not in row:
+                    raise CsvValidationError(
+                        numero_fila, item_id, f"falta la columna del ítem '{item_id}'"
+                    )
+                valor = row[item_id]
+                if valor not in ("0", "1"):
+                    raise CsvValidationError(
+                        numero_fila, item_id, f"la etiqueta debe ser 0 o 1, no {valor!r}"
+                    )
+                etiquetas[item_id] = int(valor)
+
+            rows.append(
                 {
-                    "id": ev["id"],
-                    "item": item["id"],
-                    "humano": ETIQUETA_CUMPLE if humano_cumple else ETIQUETA_NO,
-                    "jev": ETIQUETA_CUMPLE if registro["probabilidad"] >= umbral else ETIQUETA_NO,
-                    "probabilidad": registro["probabilidad"],
-                    "confianza": registro["confianza"],
-                    "ambiguo": ev["fila"].get("ambiguo") == "si",
-                    "texto": ev.get("texto_enviado") or ev["fila"].get("texto", ""),
-                    "notas": ev["fila"].get("notas", ""),
+                    "id": row_id,
+                    "texto": row["texto"],
+                    "ambiguo": row.get("ambiguo", "0") == "1",
+                    "etiquetas": etiquetas,
                 }
             )
-    desacuerdos.sort(key=lambda d: d["confianza"], reverse=True)
-    return desacuerdos[:cuantos]
+        return rows
 
 
-# ---------------------------------------------------------------------------
-# Ejecución
-# ---------------------------------------------------------------------------
-
-def cargar_interacciones(ruta: str, rubrica: dict) -> list[dict]:
-    with open(ruta, encoding="utf-8", newline="") as archivo:
-        filas = list(csv.DictReader(archivo))
-    if not filas:
-        raise SystemExit(f"{ruta} no tiene ninguna fila")
-
-    faltan = {"id", "texto"} - set(filas[0])
-    if faltan:
-        raise SystemExit(f"{ruta}: faltan las columnas {', '.join(sorted(faltan))}")
-
-    ids_item = [item["id"] for item in rubrica["items"]]
-    sin_etiqueta = [qid for qid in ids_item if qid not in filas[0]]
-    if sin_etiqueta:
-        raise SystemExit(
-            f"{ruta}: faltan las columnas de etiqueta {', '.join(sin_etiqueta)}"
-        )
-    return filas
+def _ruido_determinista(clave: str) -> float:
+    """Ruido determinista en [-1, 1] a partir de un hash de `clave` (sin red ni azar)."""
+    digest = hashlib.sha256(clave.encode("utf-8")).hexdigest()
+    entero = int(digest[:8], 16)
+    return (entero % 2001 - 1000) / 1000.0
 
 
-def evaluar(
-    rubrica: dict, filas: list[dict], cliente, *, anonimizar: bool = True
-) -> list[dict]:
-    """Una petición por interacción. Un fallo se registra y el lote sigue.
+def fake_raw_response(rubric: dict, row: dict) -> dict:
+    """Respuesta cruda determinista de FakeJev a partir de las etiquetas humanas.
 
-    Por defecto se mide sobre el texto anonimizado, que es exactamente lo que
-    la auditoría manda en producción. Medir sobre el texto crudo daría un
-    acuerdo más alto del que el sistema real puede alcanzar, porque ese texto
-    nunca sale de la máquina.
+    Genera probabilidades cercanas a la etiqueta con algo de ruido
+    determinista (más ruido si la interacción está marcada como ambigua),
+    para ejercitar el flujo completo y las métricas sin red.
     """
-    evaluaciones = []
-    for posicion, fila in enumerate(filas, start=1):
-        etiquetas = {
-            item["id"]: fila[item["id"]].strip().lower() == ETIQUETA_CUMPLE
-            for item in rubrica["items"]
-            if fila.get(item["id"])
-        }
-        registro = {
-            "id": fila["id"],
-            "fila": fila,
-            "etiquetas": etiquetas,
-            "resultado": None,
-            "error": None,
-        }
-        texto = fila["texto"]
-        if anonimizar:
-            nombres = [fila.get("agente", ""), fila.get("cliente", "")]
-            texto = anonymize(texto, [nombre for nombre in nombres if nombre])
-        registro["texto_enviado"] = texto
-        try:
-            respuesta = cliente.evaluar(build_request(rubrica, texto))
-            registro["resultado"] = parse_response(rubrica, respuesta)
-        except (ErrorJev, ErrorRubrica) as exc:
-            registro["error"] = f"{type(exc).__name__}: {exc}"
-            print(f"  [{posicion}/{len(filas)}] {fila['id']}: {registro['error']}", file=sys.stderr)
-        else:
-            print(f"  [{posicion}/{len(filas)}] {fila['id']}: ok")
-        evaluaciones.append(registro)
-    return evaluaciones
+    answers = {}
+    for item in rubric["items"]:
+        item_id = item["id"]
+        etiqueta = row["etiquetas"][item_id]
+        amplitud = 0.35 if row["ambiguo"] else 0.1
+        ruido = _ruido_determinista(f"{row['id']}:{item_id}") * amplitud
+        base = 0.85 if etiqueta == 1 else 0.15
+        p = min(0.99, max(0.01, base + ruido))
+        answers[item_id] = {"type": "noul", "noul": round(p, 4)}
 
+    answers[rubric_mod.RIESGO_ID] = {
+        "type": "score",
+        "score": 0,
+        "confidence": 0.9,
+        "probabilities": {"0": 0.9, "1": 0.06, "2": 0.03, "3": 0.01},
+    }
+    opciones = list(rubric["motivo"]["opciones"].keys())
+    probabilities = {op: round(1.0 / len(opciones), 4) for op in opciones}
+    answers[rubric_mod.MOTIVO_ID] = {
+        "type": "choice",
+        "choice": opciones[0],
+        "confidence": 0.6,
+        "probabilities": probabilities,
+    }
 
-def uso_total(evaluaciones: list[dict]) -> dict:
-    entrada = sum(
-        ev["resultado"]["uso"]["tokens_entrada"]
-        for ev in evaluaciones
-        if ev["resultado"] is not None
-    )
-    salida = sum(
-        ev["resultado"]["uso"]["tokens_salida"]
-        for ev in evaluaciones
-        if ev["resultado"] is not None
-    )
+    input_tokens = max(1, len(row["texto"]) // 4)
     return {
-        "tokens_entrada": entrada,
-        "tokens_salida": salida,
-        "coste_usd": coste_usd(entrada),
+        "model": "fake-jev",
+        "answers": answers,
+        "usage": {"input_tokens": input_tokens, "output_tokens": 40},
     }
 
 
-# ---------------------------------------------------------------------------
+class FakeJevPorFila:
+    """Doble de pruebas de Jev que responde según el orden de las filas.
+
+    A diferencia de indexar por el `state` de la petición (el texto), esto
+    evita que dos filas con texto idéntico pero id distinto reciban la misma
+    respuesta por accidente: cada llamada a `evaluate` consume la siguiente
+    respuesta de la cola, en el mismo orden en que se construyó a partir de
+    las filas.
+    """
+
+    def __init__(self, respuestas_por_id: dict, orden_ids: list[str]):
+        self._cola = [respuestas_por_id[row_id] for row_id in orden_ids]
+        self.calls: list = []
+
+    def evaluate(self, request: dict) -> dict:
+        self.calls.append(request)
+        return self._cola.pop(0)
+
+
+def build_fake_client(rubric: dict, rows: list[dict]) -> FakeJevPorFila:
+    respuestas_por_id = {row["id"]: fake_raw_response(rubric, row) for row in rows}
+    orden_ids = [row["id"] for row in rows]
+    return FakeJevPorFila(respuestas_por_id, orden_ids)
+
+
+def run_evaluation(rubric: dict, rows: list[dict], client) -> dict:
+    """Evalúa todas las filas con `client` (FakeJev o JevClient real).
+
+    Devuelve `{"resultados": [...], "fallos": [...], "tokens_entrada": int,
+    "tokens_salida": int}`. Un fallo en una fila no detiene el resto, salvo
+    `JevAuthError` (credenciales inválidas o ausentes): esa se propaga de
+    inmediato, porque reintentar fila por fila no tiene sentido y no debe
+    llegar a escribirse ningún informe con datos parciales.
+    """
+    resultados = []
+    fallos = []
+    tokens_entrada = 0
+    tokens_salida = 0
+
+    for row in rows:
+        request = rubric_mod.build_request(rubric, row["texto"])
+        try:
+            raw = client.evaluate(request)
+            parsed = rubric_mod.parse_response(rubric, raw)
+        except JevAuthError:
+            raise
+        except (JevError, rubric_mod.RespuestaIncompletaError) as exc:
+            fallos.append({"id": row["id"], "error": str(exc)})
+            continue
+
+        usage = raw.get("usage") if isinstance(raw, dict) else None
+        if isinstance(usage, dict):
+            tokens_entrada += usage.get("input_tokens") or 0
+            tokens_salida += usage.get("output_tokens") or 0
+
+        por_item = {}
+        for item_id in item_ids(rubric):
+            probabilidad = parsed[item_id]["probabilidad"]
+            por_item[item_id] = {
+                "etiqueta": row["etiquetas"][item_id],
+                "prediccion": prediccion_de(probabilidad),
+                "probabilidad": probabilidad,
+                "confianza": confianza_de(probabilidad),
+            }
+        resultados.append({"id": row["id"], "texto": row["texto"], "por_item": por_item})
+
+    return {
+        "resultados": resultados,
+        "fallos": fallos,
+        "tokens_entrada": tokens_entrada,
+        "tokens_salida": tokens_salida,
+    }
+
+
+# --------------------------------------------------------------------------
 # Informe
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
-def _pct(valor: float | None) -> str:
-    return "—" if valor is None else f"{valor * 100:.1f} %"
+def render_informe(rubric: dict, evaluacion: dict, filas_totales: int, modo: str) -> tuple[str, list[str]]:
+    """Arma el informe en Markdown.
 
+    Devuelve `(texto, items_bajo_umbral)`: el texto del informe y la lista de
+    ítems cuyo acuerdo quedó por debajo de `UMBRAL_DECISION`, para que quien
+    llama pueda decidir el código de salida sin reimplementar el cálculo.
+    """
+    ids = item_ids(rubric)
+    resultados = evaluacion["resultados"]
+    fallos = evaluacion["fallos"]
 
-def _recorte(texto: str, limite: int = 260) -> str:
-    plano = " ".join(texto.split())
-    return plano if len(plano) <= limite else plano[: limite - 1] + "…"
+    metrics_por_item = {}
+    entradas_desacuerdo = []
+    for item_id in ids:
+        records = []
+        for r in resultados:
+            info = r["por_item"][item_id]
+            records.append(
+                {
+                    "etiqueta": info["etiqueta"],
+                    "prediccion": info["prediccion"],
+                    "confianza": info["confianza"],
+                }
+            )
+            entradas_desacuerdo.append(
+                {
+                    "id": r["id"],
+                    "item": item_id,
+                    "etiqueta": info["etiqueta"],
+                    "prediccion": info["prediccion"],
+                    "probabilidad": info["probabilidad"],
+                    "texto": r["texto"],
+                }
+            )
+        metrics_por_item[item_id] = item_metrics(records)
 
+    peores = peores_desacuerdos(entradas_desacuerdo, top=5)
 
-def escribir_informe(
-    ruta: str,
-    rubrica: dict,
-    evaluaciones: list[dict],
-    metricas: dict,
-    *,
-    modo: str,
-    umbral: float,
-    umbral_confianza: float,
-    anonimizado: bool = True,
-) -> list[str]:
-    """Escribe el informe y devuelve los ítems que no llegan al mínimo."""
-    correctas = [ev for ev in evaluaciones if ev["resultado"] is not None]
-    fallidas = [ev for ev in evaluaciones if ev["resultado"] is None]
-    uso = uso_total(evaluaciones)
-    bajo_minimo = [
-        qid
-        for qid, m in metricas.items()
-        if m["acuerdo"] is not None and m["acuerdo"] < ACUERDO_MINIMO
-    ]
+    def fmt_pct(v):
+        return f"{v * 100:.1f}%" if v is not None else "n/d (sin datos)"
 
-    lineas = [
-        "# ¿Funciona Jev en español? — informe de la fase 2",
-        "",
-        f"- Fecha: {datetime.date.today().isoformat()}",
-        f"- Modo: **{modo}**",
-        f"- Rúbrica: `{rubrica['id']}` v{rubrica['version']} ({len(rubrica['items'])} ítems)",
-        f"- Interacciones evaluadas: **{len(correctas)}** de {len(evaluaciones)}",
-        f"- Umbral de cumplimiento: noul ≥ {umbral} · umbral de confianza: {umbral_confianza}",
-        f"- Texto enviado: **{'anonimizado' if anonimizado else 'crudo'}**"
-        + (
-            " (lo mismo que manda la auditoría en producción)"
-            if anonimizado
-            else " (no es lo que manda producción: sobreestima el acuerdo)"
-        ),
-        f"- Tokens de entrada: {uso['tokens_entrada']:,} · de salida: {uso['tokens_salida']:,}",
-        f"- Coste: ${uso['coste_usd']:.6f}",
-        "",
-    ]
-
+    lineas = []
+    lineas.append("# Informe de evaluación de Jev en español (Fase 2)")
+    lineas.append("")
     if modo == "fake":
-        lineas += [
-            "> **Este informe no mide nada.** Está generado con `FakeJev`, que inventa",
-            "> números deterministas a partir del texto. Sirve para comprobar que el",
-            "> evaluador corre de punta a punta; las cifras de acuerdo son ruido.",
-            "",
-        ]
-
-    lineas += [
-        "## Acuerdo por ítem",
-        "",
-        "La clase positiva es el **no cumple**: lo que una auditoría necesita detectar.",
-        "",
-        "| Ítem | Crítico | n | Acuerdo | Precisión «no» | Exhaustividad «no» | «no» humano | «no» Jev | n conf. ≥ umbral | Acuerdo conf. |",
-        "| --- | :-: | --: | --: | --: | --: | --: | --: | --: | --: |",
-    ]
-    for item in rubrica["items"]:
-        m = metricas[item["id"]]
         lineas.append(
-            "| `{id}` | {critico} | {n} | {acuerdo} | {prec} | {exh} | {nh} | {nj} | {nc} | {ac} |".format(
-                id=item["id"],
-                critico="sí" if item["critico"] else "",
-                n=m["n"],
-                acuerdo=_pct(m["acuerdo"]),
-                prec=_pct(m["precision_no_cumple"]),
-                exh=_pct(m["exhaustividad_no_cumple"]),
-                nh=m["no_cumple_humano"],
-                nj=m["no_cumple_jev"],
-                nc=m["n_confiables"],
-                ac=_pct(m["acuerdo_confiables"]),
-            )
+            "**Modo fake, no mide nada.** Las respuestas son sintéticas y deterministas "
+            "(`FakeJevPorFila`), generadas a partir de las propias etiquetas humanas: no "
+            "pasan por Jev ni por la red. Este informe solo sirve para ejercitar el flujo."
         )
+        lineas.append("")
+    modo_txt = "`--fake` (sin red)" if modo == "fake" else "en vivo (JevClient, TYPESAFE_API_KEY)"
+    lineas.append(f"Generado por: modo {modo_txt}, el {datetime.now(timezone.utc).isoformat()}.")
+    lineas.append("")
+    lineas.append(
+        f"Filas evaluadas: {len(resultados)} de {filas_totales}. Filas fallidas: {len(fallos)}."
+    )
+    if fallos:
+        lineas.append("")
+        lineas.append("Fallos:")
+        for f in fallos:
+            lineas.append(f"- {f['id']}: {f['error']}")
+    lineas.append("")
 
-    lineas += ["", "## Punto de decisión", ""]
-    if bajo_minimo:
-        lineas += [
-            f"**{len(bajo_minimo)} ítem(s) por debajo del {ACUERDO_MINIMO:.0%} de acuerdo:** "
-            + ", ".join(f"`{qid}`" for qid in bajo_minimo),
-            "",
-            "Opciones, según el plan: reformular el ítem en inglés, traducir el texto",
-            "antes de enviarlo, o quitar el ítem de la rúbrica.",
-        ]
-    else:
+    lineas.append("## Métricas por ítem")
+    lineas.append("")
+    lineas.append(
+        "| Ítem | Acuerdo | Precisión no cumple | Exhaustividad no cumple | "
+        "Acuerdo confianza ≥ 0,7 (n) | n |"
+    )
+    lineas.append("|---|---|---|---|---|---|")
+    items_bajo_umbral = []
+    for item_id in ids:
+        m = metrics_por_item[item_id]
+        if m["acuerdo"] is not None and m["acuerdo"] < UMBRAL_DECISION:
+            items_bajo_umbral.append(item_id)
         lineas.append(
-            f"Todos los ítems llegan al {ACUERDO_MINIMO:.0%} de acuerdo. Se puede seguir."
+            f"| {item_id} | {fmt_pct(m['acuerdo'])} | {fmt_pct(m['precision_no_cumple'])} | "
+            f"{fmt_pct(m['exhaustividad_no_cumple'])} | "
+            f"{fmt_pct(m['acuerdo_alta_confianza'])} ({m['n_alta_confianza']}) | {m['n']} |"
         )
+    lineas.append("")
 
-    flojos = [
-        (qid, m)
-        for qid, m in metricas.items()
-        if m["no_cumple_humano"]
-        and (m["exhaustividad_no_cumple"] or 0.0) < EXHAUSTIVIDAD_MINIMA
-    ]
-    criticos = {item["id"] for item in rubrica["items"] if item["critico"]}
-    lineas += ["", "### Cobertura del «no cumple»", ""]
-    if flojos:
-        lineas += [
-            "El acuerdo de arriba tapa esto: cuando la falla es rara, un ítem puede",
-            f"acertar el 95 % de las veces y no detectar casi ninguna. Por debajo del",
-            f"{EXHAUSTIVIDAD_MINIMA:.0%} de exhaustividad:",
-            "",
-        ]
-        for qid, m in flojos:
-            perdidas = fallas_no_detectadas(rubrica, evaluaciones, qid, umbral=umbral)
-            lineas.append(
-                f"- `{qid}`"
-                + (" **(crítico)**" if qid in criticos else "")
-                + f": detecta {m['aciertos_no_cumple']} de {m['no_cumple_humano']} "
-                + f"fallas reales ({_pct(m['exhaustividad_no_cumple'])})."
-            )
-            if perdidas:
-                detalle = ", ".join(f"{ident} con {valor:.2f}" for ident, valor in perdidas)
-                lineas.append(f"  Se le escaparon: {detalle}.")
-                lineas.append(
-                    f"  Subiendo su umbral de cumplimiento por encima de "
-                    f"{perdidas[0][1]:.2f} se detectarían todas."
-                )
-        if any(qid in criticos for qid, _ in flojos):
-            lineas += [
-                "",
-                "Un ítem crítico que no detecta las fallas es el peor caso para una",
-                "auditoría: la interacción pasa y nadie la revisa. Antes del piloto hay",
-                "que bajarle el umbral de cumplimiento a ese ítem, afinar sus criterios,",
-                "o mandarlo siempre a revisión humana.",
-            ]
-    else:
+    if items_bajo_umbral:
         lineas.append(
-            f"Ningún ítem baja del {EXHAUSTIVIDAD_MINIMA:.0%} de exhaustividad sobre las "
-            "fallas reales."
+            f"**PUNTO DE DECISIÓN:** los ítems {', '.join(items_bajo_umbral)} tienen acuerdo "
+            f"por debajo del {UMBRAL_DECISION * 100:.0f}%. Detenerse y decidir: reformular en "
+            "inglés, traducir el texto antes de enviarlo, o quitar el ítem."
         )
-
-    lineas += ["", "## Los 5 peores desacuerdos", ""]
-    peores = peores_desacuerdos(rubrica, evaluaciones, umbral=umbral)
-    if not peores:
-        lineas.append("No hubo desacuerdos.")
-    for numero, d in enumerate(peores, start=1):
-        lineas += [
-            f"### {numero}. `{d['item']}` en {d['id']}"
-            + (" · marcada como ambigua" if d["ambiguo"] else ""),
-            "",
-            f"- Humano: **{d['humano']}** · Jev: **{d['jev']}** "
-            f"(noul {d['probabilidad']:.2f}, confianza {d['confianza']:.2f})",
-            f"- Nota de la etiqueta: {d['notas']}" if d["notas"] else "",
-            "",
-            f"> {_recorte(d['texto'])}",
-            "",
-        ]
-
-    if fallidas:
-        lineas += ["## Interacciones que fallaron", ""]
-        for ev in fallidas:
-            lineas.append(f"- `{ev['id']}`: {ev['error']}")
         lineas.append("")
 
-    lineas += [
-        "## Límites conocidos",
-        "",
-        "- Los textos los escribimos nosotros, así que sobreestiman el acierto: no",
-        "  tienen los cortes, muletillas ni errores de una transcripción real. La",
-        "  validación de verdad es el piloto de la fase 6.",
-        "- Las etiquetas humanas son de un solo anotador, sin segunda opinión.",
-        "- El «no cumple» es minoritario en casi todos los ítems, así que la",
-        "  exhaustividad se calcula sobre pocos casos y se mueve mucho.",
-        "- El acuerdo depende del umbral de 0,5; un ítem puede mejorar solo con",
-        "  moverlo. La fase 5 fija los umbrales definitivos a partir de aquí.",
-        "- Jev lee la pregunta al pie de la letra (ver la documentación de",
-        "  jaggedness de jev-1.13). Varios desacuerdos salen de ahí: el agente sí",
-        "  hizo *una* pregunta concreta o sí dio *un* plazo, aunque la llamada",
-        "  entera fuera mala. Si eso molesta, hay que escribirlo en el criterio,",
-        "  no esperar que el modelo lea la intención.",
-        "",
-    ]
+    lineas.append("## Coste")
+    lineas.append("")
+    costo = costo_dolares(evaluacion["tokens_entrada"])
+    lineas.append(
+        f"Tokens de entrada (facturados): {evaluacion['tokens_entrada']}. "
+        f"Tokens de salida (no se facturan): {evaluacion['tokens_salida']}."
+    )
+    lineas.append(
+        f"Coste real: ${costo:.6f} "
+        f"(tokens de entrada × ${PRECIO_ENTRADA_POR_MILLON}/1M; la salida es gratis)."
+    )
+    lineas.append("")
 
-    with open(ruta, "w", encoding="utf-8", newline="\n") as archivo:
-        archivo.write("\n".join(linea for linea in lineas if linea is not None) + "\n")
-    return bajo_minimo
+    lineas.append("## Los peores desacuerdos")
+    lineas.append("")
+    if peores:
+        lineas.append("| id | ítem | etiqueta | probabilidad | extracto |")
+        lineas.append("|---|---|---|---|---|")
+        for e in peores:
+            extracto = e["texto"][:80].replace("\n", " ").replace("|", "/")
+            lineas.append(
+                f"| {e['id']} | {e['item']} | {e['etiqueta']} | {e['probabilidad']:.2f} | "
+                f"{extracto}... |"
+            )
+    else:
+        lineas.append("No hay desacuerdos: todas las predicciones coinciden con las etiquetas.")
+    lineas.append("")
+
+    return "\n".join(lineas), items_bajo_umbral
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # CLI
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--fake", action="store_true", help="usa FakeJev, sin red ni coste")
-    parser.add_argument("--rubrica", default=RUBRICA)
-    parser.add_argument("--datos", default=DATOS)
-    parser.add_argument("--salida", default=INFORME)
-    parser.add_argument("--umbral", type=float, default=UMBRAL)
-    parser.add_argument("--umbral-confianza", type=float, default=UMBRAL_CONFIANZA)
-    parser.add_argument("--limite", type=int, default=0, help="evalúa solo las primeras N filas")
-    parser.add_argument(
-        "--sin-anonimizar",
-        action="store_true",
-        dest="sin_anonimizar",
-        help="manda el texto crudo; sirve para medir cuánto cuesta anonimizar",
-    )
-    args = parser.parse_args(argv)
+    argv = argv if argv is not None else sys.argv[1:]
+    fake = "--fake" in argv
 
-    rubrica = load_rubric(args.rubrica)
-    filas = cargar_interacciones(args.datos, rubrica)
-    if args.limite:
-        filas = filas[: args.limite]
+    rubric = rubric_mod.load_rubric(RUBRIC_PATH)
+    ids = item_ids(rubric)
 
-    if args.fake:
-        cliente, modo = FakeJev(), "fake"
+    try:
+        rows = read_synthetic_csv(CSV_PATH, ids)
+    except CsvValidationError as exc:
+        print(f"CSV inválido ({CSV_PATH}): {exc}", file=sys.stderr)
+        return EXIT_CSV_INVALIDO
+
+    if fake:
+        client = build_fake_client(rubric, rows)
     else:
-        cliente, modo = JevClient(), "en vivo"
-        if not cliente.clave:
-            print(
-                "falta TYPESAFE_API_KEY en el entorno; para probar sin red usa --fake",
-                file=sys.stderr,
-            )
-            return 2
+        client = JevClient()
 
-    print(f"Evaluando {len(filas)} interacciones en modo {modo}...")
-    evaluaciones = evaluar(rubrica, filas, cliente, anonimizar=not args.sin_anonimizar)
-    metricas = metricas_por_item(
-        rubrica,
-        evaluaciones,
-        umbral=args.umbral,
-        umbral_confianza=args.umbral_confianza,
-    )
-    bajo_minimo = escribir_informe(
-        args.salida,
-        rubrica,
-        evaluaciones,
-        metricas,
-        modo=modo,
-        umbral=args.umbral,
-        umbral_confianza=args.umbral_confianza,
-        anonimizado=not args.sin_anonimizar,
-    )
-
-    uso = uso_total(evaluaciones)
-    correctas = sum(1 for ev in evaluaciones if ev["resultado"] is not None)
-    print(f"\n{correctas}/{len(evaluaciones)} interacciones evaluadas.")
-    print(f"Tokens de entrada: {uso['tokens_entrada']:,} · coste ${uso['coste_usd']:.6f}")
-    print(f"Informe: {args.salida}")
-    if bajo_minimo and modo != "fake":
+    try:
+        evaluacion = run_evaluation(rubric, rows, client)
+    except JevAuthError as exc:
+        print(f"Error de autenticación con Jev: {exc}", file=sys.stderr)
         print(
-            "\nPUNTO DE DECISIÓN: por debajo del "
-            f"{ACUERDO_MINIMO:.0%} de acuerdo: {', '.join(bajo_minimo)}",
+            "Define TYPESAFE_API_KEY con una API key válida antes de correr en modo en vivo. "
+            "No se escribió ningún informe.",
             file=sys.stderr,
         )
-    return 0
+        return EXIT_AUTH_ERROR
+
+    informe_path = INFORME_FAKE_PATH if fake else INFORME_PATH
+    informe, items_bajo_umbral = render_informe(
+        rubric, evaluacion, len(rows), "fake" if fake else "vivo"
+    )
+
+    with open(informe_path, "w", encoding="utf-8") as f:
+        f.write(informe)
+
+    print(f"Informe escrito en {informe_path}")
+    print(f"Filas evaluadas: {len(evaluacion['resultados'])} de {len(rows)}")
+    print(f"Filas fallidas: {len(evaluacion['fallos'])}")
+    for f_ in evaluacion["fallos"]:
+        print(f"  - {f_['id']}: {f_['error']}")
+
+    if evaluacion["fallos"]:
+        return EXIT_FILAS_FALLIDAS
+    if items_bajo_umbral:
+        return EXIT_DEBAJO_UMBRAL
+    return EXIT_OK
 
 
 if __name__ == "__main__":

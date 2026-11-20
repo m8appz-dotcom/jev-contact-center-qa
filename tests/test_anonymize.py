@@ -1,272 +1,294 @@
-"""Tests del anonimizador. Lo que se mide es que no se escape nada y que no
-se tape de más: las dos cosas rompen el producto, una por ley y la otra
-porque deja a Jev sin lo que necesita para juzgar la llamada.
-"""
-
-from __future__ import annotations
-
 import csv
 import os
+import random
+import re
+import unicodedata
 import unittest
 
-from jevqa.anonymize import (
-    ETIQUETA_CEDULA,
-    ETIQUETA_CORREO,
-    ETIQUETA_NOMBRE,
-    ETIQUETA_RUC,
-    ETIQUETA_TARJETA,
-    ETIQUETA_TELEFONO,
-    anonimizar_con_mapa,
-    anonymize,
-    cedula_valida,
-    luhn_valido,
-    ruc_valido,
+from jevqa.anonymize import anonymize, restore
+
+SINTETICAS_PATH = os.path.join(
+    os.path.dirname(__file__), "..", "data", "eval", "sinteticas.csv"
 )
 
-RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SINTETICAS = os.path.join(RAIZ, "data", "eval", "sinteticas.csv")
 
-CEDULA = "1712345675"
-CEDULA_GUAYAS = "0923456784"
-#: Mismos diez dígitos con el último cambiado: ya no es una cédula.
-NO_CEDULA = "1712345670"
-RUC_NATURAL = "1712345675001"
-TARJETA = "4532012345678902"
-NO_TARJETA = "4532012345678901"
+def cedula(prefix9: str) -> str:
+    """Completa 9 dígitos con el dígito verificador (módulo 10)."""
+    total = 0
+    for i, d in enumerate(prefix9):
+        p = int(d) * (2 if i % 2 == 0 else 1)
+        total += p - 9 if p > 9 else p
+    return prefix9 + str((10 - total % 10) % 10)
 
 
-class TestValidadores(unittest.TestCase):
-    def test_cedula(self):
-        self.assertTrue(cedula_valida(CEDULA))
-        self.assertTrue(cedula_valida(CEDULA_GUAYAS))
-        self.assertFalse(cedula_valida(NO_CEDULA))
-        self.assertFalse(cedula_valida("9912345675"), "provincia 99 no existe")
-        self.assertFalse(cedula_valida("1762345675"), "tercer dígito 6 no es natural")
-        self.assertFalse(cedula_valida("171234567"), "solo nueve dígitos")
-        self.assertFalse(cedula_valida("17123456a5"))
-
-    def test_ruc(self):
-        self.assertTrue(ruc_valido(RUC_NATURAL))
-        self.assertFalse(ruc_valido("1712345675000"), "establecimiento 000 no existe")
-        self.assertFalse(ruc_valido("1712345670001"), "la cédula base no es válida")
-        self.assertFalse(ruc_valido("171234567500"), "solo doce dígitos")
-
-    def test_luhn(self):
-        self.assertTrue(luhn_valido(TARJETA))
-        self.assertTrue(luhn_valido("5178456734120099"))
-        self.assertFalse(luhn_valido(NO_TARJETA))
-        self.assertFalse(luhn_valido("4532 0123"))
+def luhn(prefix: str) -> str:
+    """Completa `prefix` con el dígito de control de Luhn."""
+    for check in "0123456789":
+        digits = prefix + check
+        total = 0
+        for i, d in enumerate(reversed(digits)):
+            n = int(d)
+            if i % 2 == 1:
+                n = n * 2 - 9 if n > 4 else n * 2
+            total += n
+        if total % 10 == 0:
+            return digits
+    raise AssertionError("inalcanzable")
 
 
-class TestDatosQueSeTapan(unittest.TestCase):
-    def test_cedula(self):
+def sin_tildes(texto: str) -> str:
+    base = unicodedata.normalize("NFD", texto.casefold())
+    return "".join(c for c in base if not unicodedata.combining(c))
+
+
+def agrupar(digits: str, sep: str, size: int = 4) -> str:
+    return sep.join(digits[i:i + size] for i in range(0, len(digits), size))
+
+
+CEDULA_VALIDA = cedula("171234567")  # Pichincha
+TARJETA_VALIDA = luhn("411111111111111")
+
+
+class NumerosTest(unittest.TestCase):
+    def test_cedula_valida_se_tapa(self):
         self.assertEqual(
-            anonymize(f"Mi cédula es {CEDULA}."), f"Mi cédula es {ETIQUETA_CEDULA}."
+            anonymize(f"Mi cedula es {CEDULA_VALIDA}."), "Mi cedula es [CEDULA]."
         )
 
-    def test_ruc(self):
-        self.assertEqual(
-            anonymize(f"El RUC es {RUC_NATURAL}."), f"El RUC es {ETIQUETA_RUC}."
-        )
+    def test_cedula_con_guion_se_tapa(self):
+        texto = f"cedula {CEDULA_VALIDA[:9]}-{CEDULA_VALIDA[9]}"
+        self.assertEqual(anonymize(texto), "cedula [CEDULA]")
 
-    def test_el_ruc_gana_a_la_cedula_que_contiene(self):
-        # Los diez primeros dígitos de un RUC natural son una cédula válida:
-        # si se comprobara la cédula primero, quedarían tres dígitos sueltos.
-        self.assertEqual(anonymize(RUC_NATURAL), ETIQUETA_RUC)
+    def test_diez_digitos_invalidos_no_se_tapan(self):
+        # Mismo número con el verificador alterado: es un importe, no una cédula.
+        malo = CEDULA_VALIDA[:9] + str((int(CEDULA_VALIDA[9]) + 1) % 10)
+        texto = f"El saldo pendiente es {malo} sucres antiguos."
+        self.assertEqual(anonymize(texto), texto)
 
-    def test_celular_y_fijos(self):
-        self.assertEqual(anonymize("Llame al 0991234567"), f"Llame al {ETIQUETA_TELEFONO}")
-        self.assertEqual(anonymize("Fijo 022345678"), f"Fijo {ETIQUETA_TELEFONO}")
-        self.assertEqual(anonymize("Fijo 042987654"), f"Fijo {ETIQUETA_TELEFONO}")
+    def test_diez_digitos_con_provincia_invalida_no_se_tapan(self):
+        texto = "Referencia 9912345678 del sistema."  # provincia 99 y no empieza por 09
+        self.assertEqual(anonymize(texto), texto)
 
-    def test_celular_con_codigo_de_pais(self):
-        for numero in ("+593987654321", "+593 98 765 4321", "593987654321"):
-            with self.subTest(numero=numero):
-                self.assertEqual(anonymize(f"Al {numero} ya"), f"Al {ETIQUETA_TELEFONO} ya")
+    def test_ruc_persona_natural_y_sociedad(self):
+        texto = f"RUC {CEDULA_VALIDA}001 y de la empresa 1790012345001."
+        self.assertEqual(anonymize(texto), "RUC [RUC] y de la empresa [RUC].")
+
+    def test_trece_digitos_sin_forma_de_ruc_no_son_ruc(self):
+        # Provincia 99: no es RUC; tampoco pasa Luhn, así que queda igual.
+        numero = "9912345678901"
+        if luhn(numero[:-1]) == numero:
+            numero = numero[:-1] + str((int(numero[-1]) + 1) % 10)
+        texto = f"Orden {numero}."
+        self.assertEqual(anonymize(texto), texto)
+
+    def test_tarjeta_valida_se_tapa_en_varios_formatos(self):
+        for formato in (
+            TARJETA_VALIDA,
+            agrupar(TARJETA_VALIDA, " "),
+            agrupar(TARJETA_VALIDA, "-"),
+        ):
+            with self.subTest(formato=formato):
+                self.assertEqual(anonymize(f"tarjeta {formato} gracias"),
+                                 "tarjeta [TARJETA] gracias")
+
+    def test_tarjeta_invalida_no_se_tapa(self):
+        mala = TARJETA_VALIDA[:-1] + str((int(TARJETA_VALIDA[-1]) + 1) % 10)
+        texto = f"tarjeta {agrupar(mala, ' ')} gracias"
+        self.assertEqual(anonymize(texto), texto)
+
+    def test_tarjeta_seguida_de_otro_numero(self):
+        texto = f"tarjeta {agrupar(TARJETA_VALIDA, ' ')} 22 cuotas"
+        self.assertEqual(anonymize(texto), "tarjeta [TARJETA] 22 cuotas")
+
+    def test_telefonos_de_ecuador(self):
+        for telefono in (
+            "0991234567",
+            "099 123 4567",
+            "099-123-4567",
+            "+593 99 123 4567",
+            "+593991234567",
+            "00593 99 123 4567",
+            "02 234 5678",
+            "(02) 234-5678",
+            "042345678",
+            "+593 2 234 5678",
+        ):
+            with self.subTest(telefono=telefono):
+                self.assertEqual(anonymize(f"llame al {telefono}, gracias"),
+                                 "llame al [TELEFONO], gracias")
+
+    def test_numeros_vecinos_no_forman_una_tarjeta(self):
+        # 10000 + 0991234567 son 15 dígitos que pasan Luhn: no deben unirse.
+        self.assertEqual(anonymize("pedido 10000 0991234567"), "pedido 10000 [TELEFONO]")
 
     def test_correo(self):
         self.assertEqual(
-            anonymize("Escriba a maria.lopez@correo.com hoy"),
-            f"Escriba a {ETIQUETA_CORREO} hoy",
+            anonymize("escriba a camila.perez+qa@correo.com.ec hoy"),
+            "escriba a [CORREO] hoy",
         )
 
-    def test_tarjeta_con_y_sin_separadores(self):
-        for numero in (TARJETA, "4532 0123 4567 8902", "4532-0123-4567-8902"):
-            with self.subTest(numero=numero):
+    def test_cantidades_y_fechas_intactas(self):
+        texto = (
+            "El total es $1.250,50 con 3 cuotas de 416,83; vence el 15/03/2024 "
+            "(2024-03-15), a las 10:30. Pedido 88214, codigo 1234567, "
+            "monto 1.234.567.890,00 y 12 de marzo de 2025. Plan de 25 GB."
+        )
+        self.assertEqual(anonymize(texto), texto)
+
+    def test_fecha_con_hora_no_es_telefono(self):
+        for texto in (
+            "La cita es el 09-12-2024 10:30.",
+            "La cita es el 02-12-2024 9:30.",
+            "La cita es el 09.12.2024 10:30.",
+            "La cita es el 09/12/2024 10:30.",
+        ):
+            with self.subTest(texto=texto):
+                self.assertEqual(anonymize(texto), texto)
+
+    def test_telefonos_siguen_tapandose_junto_a_fechas(self):
+        for telefono in (
+            "0991234567",
+            "099-123-4567",
+            "099 123 4567",
+            "+593 99 123 4567",
+            "00593 99 123 4567",
+            "+593 9 8765 4321",
+            "+593 2 234 5678",
+            "(02) 234 5678",
+            "02-234-5678",
+        ):
+            with self.subTest(telefono=telefono):
                 self.assertEqual(
-                    anonymize(f"La tarjeta {numero} se bloquea"),
-                    f"La tarjeta {ETIQUETA_TARJETA} se bloquea",
+                    anonymize(f"el 09-12-2024 10:30 llamó del {telefono}."),
+                    "el 09-12-2024 10:30 llamó del [TELEFONO].",
                 )
 
-    def test_varios_datos_en_la_misma_linea(self):
-        texto = f"Soy {CEDULA}, mi correo ana@x.com y mi celular 0987654321."
+    def test_telefono_seguido_de_otro_numero(self):
+        self.assertEqual(anonymize("0991234567 25 minutos"), "[TELEFONO] 25 minutos")
+
+
+class NombresTest(unittest.TestCase):
+    def test_nombre_sin_distinguir_mayusculas_ni_tildes(self):
+        names = ["José Pérez"]
+        for variante in ("José Pérez", "jose perez", "JOSE PEREZ", "Jose", "pérez"):
+            with self.subTest(variante=variante):
+                self.assertEqual(
+                    anonymize(f"Hola {variante}, bienvenido", names),
+                    "Hola [NOMBRE_1], bienvenido",
+                )
+
+    def test_nombre_en_columna_sin_tilde_y_texto_con_tilde(self):
+        self.assertEqual(anonymize("Soy Ramón", ["Ramon"]), "Soy [NOMBRE_1]")
+
+    def test_texto_en_forma_nfd(self):
+        texto = "Soy Rámon Ruiz"  # "á" descompuesta (NFD)
+        self.assertEqual(anonymize(texto, ["Ramon Ruiz"]), "Soy [NOMBRE_1]")
+
+    def test_no_tapa_dentro_de_otras_palabras(self):
+        texto = "Esta semana la Anaconda llego."
+        self.assertEqual(anonymize(texto, ["Ana"]), texto)
+
+    def test_particulas_no_se_tapan_solas(self):
+        texto = "Maria de la Cruz llamo por la mañana de ayer."
         self.assertEqual(
-            anonymize(texto),
-            f"Soy {ETIQUETA_CEDULA}, mi correo {ETIQUETA_CORREO} "
-            f"y mi celular {ETIQUETA_TELEFONO}.",
+            anonymize(texto, ["María de la Cruz"]),
+            "[NOMBRE_1] llamo por la mañana de ayer.",
         )
 
+    def test_mapeo_reversible(self):
+        names = ["Camila Andrade", "Luis Mora"]
+        anon = anonymize("Agente Camila atiende a luis mora", names)
+        self.assertEqual(anon, "Agente [NOMBRE_1] atiende a [NOMBRE_2]")
+        self.assertEqual(restore(anon, names),
+                         "Agente Camila Andrade atiende a Luis Mora")
 
-class TestDatosQueNoSeTapan(unittest.TestCase):
-    def test_diez_digitos_que_no_son_cedula(self):
-        # Un número de caso no es una cédula aunque tenga diez dígitos.
-        self.assertEqual(
-            anonymize(f"Su caso es el {NO_CEDULA}"), f"Su caso es el {NO_CEDULA}"
-        )
+    def test_no_modifica_la_lista(self):
+        names = ["Camila"]
+        anonymize("Camila", names)
+        self.assertEqual(names, ["Camila"])
 
-    def test_tarjeta_con_digito_de_control_invalido(self):
-        self.assertEqual(anonymize(f"Dictó {NO_TARJETA}"), f"Dictó {NO_TARJETA}")
+    def test_nombres_vacios_se_ignoran(self):
+        self.assertEqual(anonymize("hola", ["", "  "]), "hola")
 
-    def test_importes(self):
-        texto = "Le cobraron $342,80 y su cupo es de $1.250,00, más $19,90 al mes."
-        self.assertEqual(anonymize(texto), texto)
+    def test_limite_conocido_nombre_fuera_de_columnas(self):
+        # Riesgo documentado: sin columna que lo nombre, un nombre propio se escapa.
+        self.assertEqual(anonymize("Hablé con Rosendo", ["Camila"]),
+                         "Hablé con Rosendo")
 
-    def test_fechas(self):
-        texto = "Fue el 15/08/2026, se resuelve el 2026-09-01, en 48 horas."
-        self.assertEqual(anonymize(texto), texto)
 
-    def test_cantidades(self):
-        texto = "Son 5 GB, 200 megas, 3 cuotas y 15 días hábiles."
-        self.assertEqual(anonymize(texto), texto)
-
-    def test_texto_sin_datos_personales_queda_igual(self):
-        texto = (
-            "Agente: Buenos días, gracias por llamar.\n"
-            "Cliente: El internet se corta cada media hora.\n"
-            "Agente: ¿Ya intentó reiniciar el módem?"
-        )
-        self.assertEqual(anonymize(texto), texto)
+class SinDatosPersonalesTest(unittest.TestCase):
+    def test_texto_sin_datos_queda_igual(self):
+        texto = "Agente: Buenos dias, en que puedo ayudarle? Cliente: No me llega la factura."
+        self.assertEqual(anonymize(texto, ["Camila"]), texto)
 
     def test_texto_vacio(self):
         self.assertEqual(anonymize(""), "")
-        self.assertEqual(anonymize("   "), "   ")
 
 
-class TestNombres(unittest.TestCase):
-    def test_nombre_completo_y_apellido_suelto(self):
-        texto = "Agente: Con gusto, María López. ¿Señora López, me confirma?"
-        salida = anonymize(texto, ["María López"])
-        self.assertNotIn("María", salida)
-        self.assertNotIn("López", salida)
-        self.assertEqual(salida.count(ETIQUETA_NOMBRE), 2)
-
-    def test_sin_distinguir_tildes(self):
-        # La columna trae la tilde y la transcripción no, o al revés.
-        self.assertNotIn("Lopez", anonymize("Señora Lopez, buenas", ["María López"]))
-        self.assertNotIn("Pérez", anonymize("Señora Pérez, buenas", ["Jhoanna Perez"]))
-
-    def test_sin_distinguir_mayusculas(self):
-        self.assertNotIn("CEDEÑO", anonymize("Habla BYRON CEDEÑO", ["Byron Cedeño"]))
-        self.assertNotIn("cedeño", anonymize("habla byron cedeño", ["Byron Cedeño"]))
-
-    def test_la_ene_se_pliega_a_la_n(self):
-        self.assertNotIn("Cedeno", anonymize("El señor Cedeno llamó", ["Byron Cedeño"]))
-
-    def test_no_parte_palabras_que_contienen_el_nombre(self):
-        # "Rosa" no debe tapar "Rosario" ni "rosado".
-        salida = anonymize("El barrio Rosario y el color rosado", ["Rosa Delgado"])
-        self.assertEqual(salida, "El barrio Rosario y el color rosado")
-
-    def test_tokens_de_menos_de_tres_letras_se_ignoran(self):
-        # "de" y "la" de un "Ana de la Torre" taparían medio texto.
-        salida = anonymize("La casa de la esquina", ["Ana de la Torre"])
-        self.assertEqual(salida, "La casa de la esquina")
-
-    def test_el_correo_gana_al_nombre_que_contiene(self):
-        salida = anonymize("Escriba a maria.lopez@correo.com", ["María López"])
-        self.assertEqual(salida, f"Escriba a {ETIQUETA_CORREO}")
-
-    def test_sin_nombres_no_se_tapa_ninguno(self):
-        texto = "Agente: le habla Rosa Delgado."
-        self.assertEqual(anonymize(texto), texto)
-
-    def test_nombre_fuera_de_las_columnas_se_escapa(self):
-        """Límite conocido: solo se tapan los nombres que vienen en el CSV.
-
-        Un tercero mencionado en la conversación (un familiar, otro agente)
-        se va tal cual. Queda documentado en el README, no arreglado.
-        """
-        salida = anonymize("Mi hermano Freddy Coello está internado", ["Ana Salazar"])
-        self.assertIn("Freddy Coello", salida)
+AGENTES = ["Camila Andrade", "Mateo Guerrero", "Sofía Núñez", "Andrés Peña"]
+CLIENTES = ["José Pérez", "María de los Ángeles Chávez", "Luis Mora", "Ramón Ibáñez"]
 
 
-class TestMapaReversible(unittest.TestCase):
-    def test_guarda_los_valores_por_etiqueta(self):
-        texto = f"Soy María López, cédula {CEDULA}, correo m@x.com"
-        salida, mapa = anonimizar_con_mapa(texto, ["María López"])
+class SinteticasSembradasTest(unittest.TestCase):
+    """Terminado cuando: 40 interacciones con datos sembrados -> 0 fugas y 0 importes tapados."""
 
-        self.assertEqual(len(mapa), 3)
-        self.assertEqual(mapa.valores(ETIQUETA_CEDULA), [CEDULA])
-        self.assertEqual(mapa.valores(ETIQUETA_NOMBRE), ["María López"])
-        self.assertEqual(mapa.valores(ETIQUETA_CORREO), ["m@x.com"])
-        self.assertNotIn(CEDULA, salida)
+    def test_cero_fugas_y_cero_importes_tapados(self):
+        with open(SINTETICAS_PATH, encoding="utf-8", newline="") as f:
+            filas = list(csv.DictReader(f))
+        self.assertEqual(len(filas), 40)
 
-    def test_restaura_el_texto_original(self):
-        texto = (
-            f"Agente: le habla Rosa Delgado.\n"
-            f"Cliente: mi cédula es {CEDULA} y mi celular 0991234567."
-        )
-        salida, mapa = anonimizar_con_mapa(texto, ["Rosa Delgado"])
-        self.assertEqual(mapa.restaurar(salida), texto)
+        rng = random.Random(593)
+        fugas, tapados = [], []
+        for i, fila in enumerate(filas):
+            agente = AGENTES[i % len(AGENTES)]
+            cliente = CLIENTES[i % len(CLIENTES)]
+            ced = cedula("%02d" % rng.randint(1, 24) + str(rng.randint(0, 5))
+                         + "%06d" % rng.randint(0, 999999))
+            tarjeta = luhn("4" + "%014d" % rng.randint(0, 10**14 - 1))
+            movil = "09%d%07d" % (rng.randint(2, 9), rng.randint(0, 9999999))
+            fijo = "0%d%07d" % (rng.randint(2, 7), rng.randint(2000000, 9999999))
+            correo = f"cliente{i}@ejemplo.ec"
+            ruc = ced + "001"
+            formatos_movil = [movil, f"{movil[:3]} {movil[3:6]} {movil[6:]}",
+                              f"+593 {movil[1:3]} {movil[3:6]} {movil[6:]}"]
+            importes = [f"${rng.randint(1, 999)}.{rng.randint(100, 999)},{rng.randint(10, 99)}",
+                        f"{rng.randint(1, 28):02d}/{rng.randint(1, 12):02d}/2024",
+                        f"pedido {rng.randint(10000, 99999)}"]
+            # Nombres con otra capitalización y sin tildes, como los dictaría un transcriptor.
+            texto = (
+                f"Agente: Le atiende {agente.split()[0]}. {fila['texto']} "
+                f"Cliente: Soy {cliente.upper()}, cedula {ced}, RUC {ruc}, "
+                f"tarjeta {agrupar(tarjeta, ' ')}, celular {formatos_movil[i % 3]}, "
+                f"fijo ({fijo[:2]}) {fijo[2:]}, correo {correo}. "
+                f"Pague {importes[0]} el {importes[1]}, {importes[2]}. "
+                f"Agente: Gracias senor {cliente.split()[-1].lower()}, "
+                f"le saluda {agente.split()[-1]}."
+            )
+            names = [agente, cliente]
+            anon = anonymize(texto, names)
 
-    def test_el_nombre_del_agente_se_recupera_para_el_informe(self):
-        # El informe interno muestra al agente; Jev nunca vio ese nombre.
-        _, mapa = anonimizar_con_mapa("Le habla Kevin Morales.", ["Kevin Morales"])
-        self.assertEqual(mapa.valores(ETIQUETA_NOMBRE), ["Kevin Morales"])
-
-    def test_texto_sin_datos_da_un_mapa_vacio(self):
-        salida, mapa = anonimizar_con_mapa("No hay nada que tapar.")
-        self.assertEqual(len(mapa), 0)
-        self.assertEqual(mapa.restaurar(salida), "No hay nada que tapar.")
-
-
-class TestConjuntoSintetico(unittest.TestCase):
-    """Sobre las 40 interacciones: 0 fugas y 0 importes tapados."""
-
-    @classmethod
-    def setUpClass(cls):
-        with open(SINTETICAS, encoding="utf-8", newline="") as archivo:
-            cls.filas = list(csv.DictReader(archivo))
-
-    def test_hay_cuarenta_interacciones(self):
-        self.assertEqual(len(self.filas), 40)
-
-    def test_cero_fugas(self):
-        fugas = []
-        for fila in self.filas:
-            salida = anonymize(fila["texto"], [fila["agente"], fila["cliente"]])
-            for dato in filter(None, fila["pii_sembrada"].split("|")):
-                if dato in salida:
+            # Los números se buscan entre los dígitos del texto sin separadores,
+            # para detectar también una fuga en formato "+593 99 123 4567".
+            digitos = re.sub(r"[^0-9]", "", anon)
+            numericos = [ced, ruc, tarjeta, movil[1:], fijo[2:]]
+            partes_nombre = [p for n in names for p in n.split()
+                             if len(p) >= 3 and p not in ("los", "las", "del")]
+            plegado = sin_tildes(anon)
+            for dato in numericos:
+                if dato in digitos:
                     fugas.append((fila["id"], dato))
-        self.assertEqual(fugas, [], f"{len(fugas)} datos personales se escaparon")
+            if correo in anon:
+                fugas.append((fila["id"], correo))
+            for parte in partes_nombre:
+                if re.search(rf"(?<!\w){sin_tildes(parte)}(?!\w)", plegado):
+                    fugas.append((fila["id"], parte))
+            for importe in importes:
+                if importe not in anon:
+                    tapados.append((fila["id"], importe))
+            self.assertGreaterEqual(restore(anon, names).count(agente), 2, fila["id"])
 
-    def test_cero_nombres_de_agente_o_cliente_filtrados(self):
-        fugas = []
-        for fila in self.filas:
-            salida = anonymize(fila["texto"], [fila["agente"], fila["cliente"]])
-            for nombre in (fila["agente"], fila["cliente"]):
-                for token in nombre.split():
-                    if len(token) >= 3 and token in salida:
-                        fugas.append((fila["id"], token))
         self.assertEqual(fugas, [])
-
-    def test_cero_importes_fechas_y_cantidades_tapados(self):
-        perdidos = []
-        for fila in self.filas:
-            salida = anonymize(fila["texto"], [fila["agente"], fila["cliente"]])
-            for dato in filter(None, fila["no_tapar"].split("|")):
-                if dato not in salida:
-                    perdidos.append((fila["id"], dato))
-        self.assertEqual(perdidos, [], f"{len(perdidos)} valores se taparon de más")
-
-    def test_el_texto_sigue_siendo_util(self):
-        # Si la anonimización se comiera la conversación, Jev no podría juzgarla.
-        for fila in self.filas:
-            salida = anonymize(fila["texto"], [fila["agente"], fila["cliente"]])
-            with self.subTest(id=fila["id"]):
-                self.assertGreater(len(salida), 0.8 * len(fila["texto"]))
-                self.assertIn("Agente:", salida)
-                self.assertIn("Cliente:", salida)
+        self.assertEqual(tapados, [])
 
 
 if __name__ == "__main__":

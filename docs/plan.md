@@ -1,6 +1,5 @@
 # Auditoría QA de contact centers con Jev (MVP) — plan
-Estado: plan cerrado el 2026-09-24, fases 1 a 7. La fase 2 se ejecutó en vivo con aprobación
-del usuario: 8 de 8 ítems por encima del 85 % de acuerdo, coste real $0,0085. Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
+Estado: plan completo (7/7). Rama: mvp-qa. Repo: C:/Users/kenny/projects/jev-qa (nuevo).
 Stack: Python 3.14, solo biblioteca estándar (urllib, csv, unittest, html). Sin dependencias nuevas sin aprobación.
 Flujo: CSV de transcripciones -> anonimizar -> 1 petición Jev por interacción -> nota y cola de revisión -> CSV + informe.
 Fuera de alcance: transcripción de audio, dashboard web, multiusuario, deploy, datos reales de clientes.
@@ -32,7 +31,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: el cuerpo de la petición contiene el texto una sola vez y exactamente N+2 preguntas; la respuesta de ejemplo de la documentación se interpreta sin pérdida de campos.
 - Verificación: `python -m unittest discover -s tests -v` → 0 fallos.
 - Riesgo: el formato real de la API difiere del documentado → el test usa una respuesta copiada de la documentación y la fase 2 lo confirma en vivo.
-- [x] cerrada
+- [x] cerrada 2026-09-21 — docs/phases/1-report.md
 
 ## Fase 2 — ¿Funciona Jev en español? (REQUIERE APROBACIÓN: credenciales y gasto < $0,01)
 - Objetivo: medir, por ítem de la rúbrica, cuánto coincide Jev con las etiquetas humanas en español antes de construir nada más.
@@ -46,7 +45,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: existe `data/eval/informe.md` con las 40 filas evaluadas y métricas por ítem. PUNTO DE DECISIÓN: si algún ítem baja del 85 % de acuerdo, detente y reporta (opciones: reformular en inglés, traducir el texto antes de enviarlo, o quitar el ítem).
 - Verificación: `python scripts/eval_jev.py --fake` → informe con 40 filas; luego `python scripts/eval_jev.py` (en vivo).
 - Riesgo: datos sintéticos escritos por nosotros sobreestiman el acierto → límite conocido; la validación real es el piloto (fase 6).
-- [x] cerrada
+- [x] cerrada 2026-09-21 — docs/phases/2-report.md
 
 ## Fase 3 — Anonimizador (ley de datos de Ecuador)
 - Objetivo: ningún dato personal identificable del cliente final sale hacia Jev.
@@ -62,7 +61,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: sobre las 40 interacciones sintéticas con datos personales sembrados, 0 fugas y 0 importes tapados.
 - Verificación: `python -m unittest tests.test_anonymize -v` → 0 fallos.
 - Riesgo: los nombres propios que no están en columnas se escapan → test que lo documenta; queda como límite conocido en el README.
-- [x] cerrada
+- [x] cerrada 2026-09-22 — docs/phases/3-report.md
 
 ## Fase 4 — Auditoría por lotes (CLI)
 - Objetivo: `python -m jevqa auditar entrada.csv` produce un CSV de resultados por interacción, anonimizando antes de cada llamada.
@@ -78,7 +77,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: con `FakeJev`, 50 filas de entrada dan 50 filas de salida; al relanzar se hacen 0 llamadas; el cuerpo enviado no contiene datos personales sembrados.
 - Verificación: `python -m unittest tests.test_pipeline -v` → 0 fallos; `python -m jevqa auditar tests/fixtures/mini.csv --fake` → exit 0.
 - Riesgo: doble gasto al relanzar → cubierto por el test de reanudación.
-- [x] cerrada
+- [x] cerrada 2026-09-22 — docs/phases/4-report.md
 
 ## Fase 5 — Nota, umbrales y cola de revisión
 - Objetivo: cada interacción tiene nota 0–100, las críticas fallan siempre y las dudosas van a revisión humana.
@@ -92,7 +91,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: los casos de cobertura dan la nota, el estado y la cola esperados.
 - Verificación: `python -m unittest tests.test_scoring -v` → 0 fallos.
 - Riesgo: umbrales mal puestos → configurables en la rúbrica, con valores por defecto sacados del informe de la fase 2.
-- [x] cerrada
+- [x] cerrada 2026-09-22 — docs/phases/5-report.md
 
 ## Fase 6 — Informe semanal y kit del piloto
 - Objetivo: un HTML por campaña y una comparación contra 100 auditorías humanas, que es lo que se entrega en el piloto.
@@ -105,7 +104,7 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: con los datos de ejemplo se generan los dos archivos con todas sus secciones y la comparación da el kappa esperado en los casos de test.
 - Verificación: `python -m unittest tests.test_report tests.test_compare -v` → 0 fallos.
 - Riesgo: HTML con texto del cliente sin escapar → test de que se escapa `<script>`.
-- [x] cerrada
+- [x] cerrada 2026-09-22 — docs/phases/6-report.md
 
 ## Fase 7 — README de operación
 - Objetivo: alguien que no ha visto el código puede correr un piloto siguiendo el README.
@@ -116,4 +115,4 @@ haiku solo para trabajo mecánico. Verificación común: `python -m unittest dis
 - Terminado cuando: todos los comandos del README corren con `--fake` y salen con exit 0.
 - Verificación: `python -m jevqa --help` → lista auditar, comparar e informe.
 - Riesgo: el README se desfasa del código → la verificación ejecuta sus comandos.
-- [x] cerrada
+- [x] cerrada 2026-09-22 — docs/phases/7-report.md

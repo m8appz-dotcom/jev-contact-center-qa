@@ -1,365 +1,199 @@
-"""Nota de la interacción, umbrales y cola de revisión humana.
+"""Nota, umbrales y cola de revisión a partir del CSV auditado (fase 4).
 
-De las probabilidades que devuelve Jev a las tres cosas que una auditoría
-necesita decidir:
-
-* **Nota 0–100.** Suma ponderada por los pesos de la rúbrica. Es el número que
-  compara a un agente con otro, así que se calcula siempre igual y no se toca
-  por ningún otro motivo.
-* **Estado.** Aprobado o suspenso. Un ítem crítico en «no cumple» fuerza el
-  suspenso aunque la nota sea alta: son las tres cosas que no se negocian
-  (verificar identidad, tratar bien al cliente, no prometer de más).
-* **Cola de revisión.** Lo que el modelo no vio claro lo mira una persona.
-
-La nota **no** se pone a cero cuando falla una crítica. Un cero borraría la
-diferencia entre una interacción por lo demás correcta y un desastre, y el
-informe de la fase 6 necesita distinguirlas: por eso van separadas la nota
-(cuánto de la rúbrica se cumplió) y el estado (si la interacción pasa). El
-porcentaje de críticas de los agregados es lo que impide que una nota alta con
-una crítica fallada se lea como un buen trabajo.
-
-Los umbrales salen del informe de la fase 2 (`data/eval/informe.md`) y se
-pueden cambiar por rúbrica, en su bloque `umbrales`.
+Traduce las probabilidades "noul" de cada ítem (una por columna, ya en el CSV
+de `jevqa.pipeline.auditar`) en una nota 0-100 ponderada por la rúbrica, un
+estado aprobado/suspenso y una marca de revisión humana para los casos
+dudosos. Solo puntúa filas con `estado == "ok"`; el resto se cuenta como
+`sin_nota` en las agregaciones. No hace I/O ni expone CLI.
 """
 
 from __future__ import annotations
 
-from typing import Iterable
+import math
 
-# ---------------------------------------------------------------------------
-# Umbrales
-# ---------------------------------------------------------------------------
-
-#: Desde esta probabilidad el ítem se da por cumplido. La fase 2 midió el
-#: acuerdo con las etiquetas humanas justo en 0,5 y los 8 ítems pasaron el
-#: 85 %, así que se queda como valor por defecto.
-UMBRAL_CUMPLE = 0.5
-
-#: Por debajo de esta confianza la respuesta no se da por buena sola y la
-#: interacción va a revisión. Es el mismo umbral con el que la fase 2 midió el
-#: «acuerdo con confianza», donde ningún ítem bajó del 93 %.
-UMBRAL_CONFIANZA = 0.7
-
-#: Banda de probabilidad que se considera indecisa (valores del plan). Para un
-#: Noul esta banda ya cae dentro de la regla de confianza —la confianza de un
-#: Noul es |2p−1|, así que 0,35–0,65 equivale a una confianza de 0 a 0,3— y
-#: solo empieza a decidir sola si una rúbrica baja `confianza` por debajo de
-#: 0,3. Se evalúa y se registra aparte para que el motivo de la revisión se lea
-#: tal como está escrito en el plan.
-AMBIGUO_MIN = 0.35
-AMBIGUO_MAX = 0.65
-
-#: Nota mínima para aprobar. No sale de la fase 2 —allí no se midió ninguna
-#: nota—, sino de la práctica habitual de los contact centers; es lo primero
-#: que hay que calibrar con el cliente en el piloto de la fase 6.
-NOTA_APROBADO = 70.0
-
-#: Por debajo de estas interacciones, el promedio de un agente es una anécdota.
-#: `agregar` lo marca para que el ranking del informe no ponga arriba a quien
-#: solo tiene una llamada auditada.
-MUESTRA_MINIMA = 5
-
-#: Claves admitidas en `umbrales`, además de `cumple_<id de ítem>`.
-CLAVES_UMBRALES = ("cumple", "confianza", "ambiguo_min", "ambiguo_max", "aprobado")
-
-#: Prefijo para fijar el umbral de cumplimiento de un solo ítem:
-#: `"cumple_verifica_identidad": 0.75`. La fase 2 encontró que con el umbral
-#: general de 0,5 ese ítem crítico detecta 1 de cada 4 fallas reales, así que
-#: antes del piloto toca afinarlo aquí, por ítem, sin mover a los demás.
-PREFIJO_ITEM = "cumple_"
-
-ESTADO_APROBADO = "aprobado"
-ESTADO_SUSPENSO = "suspenso"
-
-#: Por qué una interacción está en la cola. Se guardan los dos motivos aunque
-#: se solapen: no es lo mismo «el modelo duda» que «el modelo está en medio».
-REVISION_CONFIANZA = "confianza_baja"
-REVISION_AMBIGUA = "probabilidad_ambigua"
-
-#: Etiqueta de las filas sin campaña. Agrupar todos los vacíos en un cubo con
-#: nombre es mejor que dejar una fila de agregados con la clave en blanco.
-SIN_CAMPANA = "(sin campaña)"
-
-CAMPO_AGENTE = "agente"
-CAMPO_CAMPANA = "campaña"
+# Umbrales por defecto. `confianza` (= |2p-1|) sale del informe de la fase 2
+# (acuerdo medido con confianza >= 0,7); la banda dudosa [0,35, 0,65] la fija
+# el plan; `aprobado` = 70 es una decisión de producto sin medir. Todos son
+# configurables por rúbrica vía la clave opcional `umbrales`.
+DEFAULT_UMBRALES = {
+    "confianza": 0.7,
+    "dudosa_min": 0.35,
+    "dudosa_max": 0.65,
+    "aprobado": 70,
+}
 
 
-class ErrorScoring(Exception):
-    """Base de los errores de este módulo."""
+class ScoringError(Exception):
+    """La rúbrica, los umbrales o una fila no tienen el formato esperado para puntuar."""
 
 
-class UmbralInvalido(ErrorScoring):
-    """El bloque `umbrales` de la rúbrica tiene un valor que no se puede usar."""
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-class ResultadoIncompleto(ErrorScoring):
-    """Al resultado le falta algún ítem de la rúbrica con la que se califica."""
+def umbrales_de(rubric: dict) -> dict:
+    """Umbrales efectivos: `DEFAULT_UMBRALES` con las claves que la rúbrica sobrescribe.
 
-    def __init__(self, faltantes: list[str]) -> None:
-        self.faltantes = list(faltantes)
-        super().__init__("el resultado no trae los ítems: " + ", ".join(self.faltantes))
-
-
-def resolver_umbrales(rubrica: dict, extra: dict | None = None) -> dict:
-    """Mezcla los valores por defecto con los de la rúbrica y los valida.
-
-    `extra` gana sobre la rúbrica y la rúbrica gana sobre los valores por
-    defecto, para que una corrida puntual pueda mover un umbral sin editar el
-    archivo.
+    Lanza `ScoringError` si `umbrales` trae una clave desconocida, un valor no
+    numérico, `confianza`/`dudosa_min`/`dudosa_max` fuera de [0,1],
+    `dudosa_min` > `dudosa_max` o `aprobado` fuera de [0,100].
     """
-    umbrales = {
-        "cumple": UMBRAL_CUMPLE,
-        "confianza": UMBRAL_CONFIANZA,
-        "ambiguo_min": AMBIGUO_MIN,
-        "ambiguo_max": AMBIGUO_MAX,
-        "aprobado": NOTA_APROBADO,
-    }
-    ids_items = {item["id"] for item in rubrica.get("items", ())}
+    umbrales = dict(DEFAULT_UMBRALES)
+    overrides = rubric.get("umbrales", {}) if isinstance(rubric, dict) else {}
+    if not isinstance(overrides, dict):
+        raise ScoringError("'umbrales' debe ser un objeto")
+    for clave, valor in overrides.items():
+        if clave not in DEFAULT_UMBRALES:
+            raise ScoringError(f"umbral desconocido: '{clave}'")
+        if not _is_number(valor):
+            raise ScoringError(f"el umbral '{clave}' debe ser numérico")
+        umbrales[clave] = valor
 
-    for origen in (rubrica.get("umbrales") or {}, extra or {}):
-        for clave_cruda, valor in origen.items():
-            clave = str(clave_cruda)
-            if isinstance(valor, bool) or not isinstance(valor, (int, float)):
-                raise UmbralInvalido(f"umbrales: {clave} debe ser un número")
-            if clave not in CLAVES_UMBRALES and not _es_umbral_de_item(clave, ids_items):
-                raise UmbralInvalido(
-                    f"umbrales: {clave} no es un umbral conocido. Se admiten "
-                    + ", ".join(CLAVES_UMBRALES)
-                    + f", y {PREFIJO_ITEM}<id de ítem> para un ítem suelto"
-                )
-            umbrales[clave] = float(valor)
-
-    for clave in ("cumple", "confianza", "ambiguo_min", "ambiguo_max"):
-        _validar_rango(umbrales, clave, 0.0, 1.0)
-    _validar_rango(umbrales, "aprobado", 0.0, 100.0)
-    for clave in umbrales:
-        if clave.startswith(PREFIJO_ITEM):
-            _validar_rango(umbrales, clave, 0.0, 1.0)
-    if umbrales["ambiguo_min"] > umbrales["ambiguo_max"]:
-        raise UmbralInvalido(
-            f"umbrales: ambiguo_min ({umbrales['ambiguo_min']}) no puede ser mayor "
-            f"que ambiguo_max ({umbrales['ambiguo_max']})"
-        )
+    for clave in ("confianza", "dudosa_min", "dudosa_max"):
+        if not (0 <= umbrales[clave] <= 1):
+            raise ScoringError(f"el umbral '{clave}' debe estar entre 0 y 1")
+    if umbrales["dudosa_min"] > umbrales["dudosa_max"]:
+        raise ScoringError("'dudosa_min' no puede ser mayor que 'dudosa_max'")
+    if not (0 <= umbrales["aprobado"] <= 100):
+        raise ScoringError("el umbral 'aprobado' debe estar entre 0 y 100")
     return umbrales
 
 
-def _es_umbral_de_item(clave: str, ids_items: set[str]) -> bool:
-    return clave.startswith(PREFIJO_ITEM) and clave[len(PREFIJO_ITEM):] in ids_items
+def _validar_items(rubric: dict) -> None:
+    """Valida los pesos y el campo `critico` de los ítems de la rúbrica."""
+    items = rubric["items"]
+    total_peso = 0
+    for item in items:
+        peso = item["peso"]
+        if not _is_number(peso) or not math.isfinite(peso) or peso < 0:
+            raise ScoringError(f"peso inválido para el ítem '{item.get('id')}': {peso!r}")
+        if not isinstance(item["critico"], bool):
+            raise ScoringError(f"'critico' debe ser booleano para el ítem '{item.get('id')}'")
+        total_peso += peso
+    if total_peso <= 0:
+        raise ScoringError("la suma de pesos de la rúbrica debe ser mayor que 0")
 
 
-def _validar_rango(umbrales: dict, clave: str, minimo: float, maximo: float) -> None:
-    valor = umbrales[clave]
-    if not minimo <= valor <= maximo:
-        raise UmbralInvalido(
-            f"umbrales: {clave} debe estar entre {minimo} y {maximo}, llegó {valor}"
+def _parse_probabilidad(fila_id, item_id: str, valor) -> float:
+    if valor is None or valor == "":
+        raise ScoringError(f"fila '{fila_id}': falta la probabilidad del ítem '{item_id}'")
+    try:
+        p = float(valor)
+    except (TypeError, ValueError):
+        raise ScoringError(
+            f"fila '{fila_id}': probabilidad no numérica para el ítem '{item_id}': {valor!r}"
         )
+    if math.isnan(p):
+        raise ScoringError(f"fila '{fila_id}': probabilidad NaN para el ítem '{item_id}'")
+    if not (0 <= p <= 1):
+        raise ScoringError(
+            f"fila '{fila_id}': probabilidad fuera de [0,1] para el ítem '{item_id}': {p}"
+        )
+    return p
 
 
-def umbral_de_item(umbrales: dict, item_id: str) -> float:
-    """El umbral de un ítem: el suyo si lo tiene, si no el general."""
-    return float(umbrales.get(PREFIJO_ITEM + item_id, umbrales["cumple"]))
+def puntuar(rubric: dict, fila: dict) -> dict:
+    """Puntúa una fila `estado == "ok"` del CSV auditado.
 
-
-# ---------------------------------------------------------------------------
-# Nota de una interacción
-# ---------------------------------------------------------------------------
-
-def calificar(
-    rubrica: dict,
-    resultado: dict,
-    *,
-    meta: dict | None = None,
-    umbrales: dict | None = None,
-) -> dict:
-    """Convierte un resultado de `parse_response` en nota, estado y revisión.
-
-    `meta` son los datos de la fila (id, agente, campaña, fecha) que el lote ya
-    conoce; se copian tal cual para que los agregados y el informe no tengan
-    que volver al CSV de entrada.
+    Un ítem cumple si `p >= 0,5`; su confianza es `|2p-1|`. Es dudoso si la
+    confianza queda por debajo del umbral `confianza` o si `p` cae dentro de
+    la banda `[dudosa_min, dudosa_max]`. La fila entra en revisión si algún
+    ítem es dudoso. La nota es la suma ponderada de los ítems que cumplen
+    sobre la suma de los pesos, 0-100 a un decimal; el estado es "suspenso"
+    si algún ítem crítico no cumple o si la nota queda por debajo del umbral
+    `aprobado` (la nota reportada no cambia por eso, solo el estado).
     """
-    umbrales = umbrales if umbrales is not None else resolver_umbrales(rubrica)
-    respuestas = resultado.get("items") or {}
-    faltantes = [item["id"] for item in rubrica["items"] if item["id"] not in respuestas]
-    if faltantes:
-        raise ResultadoIncompleto(faltantes)
+    if fila.get("estado") != "ok":
+        raise ScoringError(f"fila '{fila.get('id')}': solo se puntúan filas con estado 'ok'")
 
-    items: dict[str, dict] = {}
+    _validar_items(rubric)
+    umbrales = umbrales_de(rubric)
+    fila_id = fila.get("id")
+
     peso_total = 0.0
-    peso_cumplido = 0.0
-    criticas: list[str] = []
-    a_revisar: list[str] = []
-
-    for item in rubrica["items"]:
-        registro = respuestas[item["id"]]
-        probabilidad = float(registro["probabilidad"])
-        confianza = float(registro["confianza"])
-        peso = float(item["peso"])
-        umbral = umbral_de_item(umbrales, item["id"])
-        cumple = probabilidad >= umbral
-
-        poca_confianza = confianza < umbrales["confianza"]
-        ambiguo = umbrales["ambiguo_min"] <= probabilidad <= umbrales["ambiguo_max"]
-        motivos = []
-        if poca_confianza:
-            motivos.append(REVISION_CONFIANZA)
-        if ambiguo:
-            motivos.append(REVISION_AMBIGUA)
+    peso_cumple = 0.0
+    criticos_fallidos = []
+    motivos_revision = []
+    for item in rubric["items"]:
+        item_id = item["id"]
+        peso = item["peso"]
+        p = _parse_probabilidad(fila_id, item_id, fila.get(item_id))
+        cumple = p >= 0.5
+        confianza = abs(2 * p - 1)
 
         peso_total += peso
         if cumple:
-            peso_cumplido += peso
+            peso_cumple += peso
         elif item["critico"]:
-            criticas.append(item["id"])
-        if motivos:
-            a_revisar.append(item["id"])
+            criticos_fallidos.append(item_id)
 
-        items[item["id"]] = {
-            "cumple": cumple,
-            "critico": item["critico"],
-            "peso": peso,
-            "probabilidad": probabilidad,
-            "confianza": confianza,
-            "umbral": umbral,
-            "ambiguo": ambiguo,
-            "poca_confianza": poca_confianza,
-            "motivos_revision": motivos,
-        }
+        if confianza < umbrales["confianza"] or umbrales["dudosa_min"] <= p <= umbrales["dudosa_max"]:
+            motivos_revision.append(item_id)
 
-    # peso_total nunca es cero: `load_rubric` exige al menos un ítem y peso > 0.
-    nota = round(100.0 * peso_cumplido / peso_total, 2)
-    aprueba = nota >= umbrales["aprobado"] and not criticas
+    nota = round(100 * peso_cumple / peso_total, 1)
+    estado = "suspenso" if criticos_fallidos or nota < umbrales["aprobado"] else "aprobado"
 
-    calificacion = {
-        "id": "",
-        CAMPO_AGENTE: "",
-        CAMPO_CAMPANA: "",
-        "fecha": "",
-        "rubrica": resultado.get("rubrica", rubrica.get("id", "")),
-        "version_rubrica": resultado.get("version_rubrica", rubrica.get("version", "")),
-        "nota": nota,
-        "estado": ESTADO_APROBADO if aprueba else ESTADO_SUSPENSO,
-        "criticas_falladas": criticas,
-        "revisar": bool(a_revisar),
-        "items_a_revisar": a_revisar,
-        "motivos_revision": sorted(
-            {motivo for qid in a_revisar for motivo in items[qid]["motivos_revision"]}
-        ),
-        "peso_cumplido": round(peso_cumplido, 4),
-        "peso_total": round(peso_total, 4),
-        "items": items,
-        "riesgo": resultado.get("riesgo"),
-        "motivo": resultado.get("motivo"),
-    }
-    for campo in ("id", CAMPO_AGENTE, CAMPO_CAMPANA, "fecha"):
-        valor = (meta or {}).get(campo, "")
-        calificacion[campo] = "" if valor is None else str(valor).strip()
-    return calificacion
-
-
-# ---------------------------------------------------------------------------
-# Cola de revisión
-# ---------------------------------------------------------------------------
-
-def cola_de_revision(calificaciones: Iterable[dict]) -> list[dict]:
-    """Las interacciones que mira una persona, la más urgente primero.
-
-    El orden es el del riesgo para la empresa, no el de llegada: primero las
-    que fallaron una crítica, después las de peor nota, y el id desempata para
-    que dos corridas sobre los mismos datos den la misma cola.
-    """
-    return sorted(
-        (c for c in calificaciones if c.get("revisar")),
-        key=lambda c: (
-            not c.get("criticas_falladas"),
-            float(c.get("nota", 0.0)),
-            str(c.get("id", "")),
-        ),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Agregados
-# ---------------------------------------------------------------------------
-
-def agregar(calificaciones: Iterable[dict]) -> dict:
-    """Agrupa las calificaciones por agente y por campaña, más un total.
-
-    Cada grupo trae nota media, porcentaje de interacciones con alguna crítica
-    fallada y tamaño de la cola. Una lista vacía devuelve grupos vacíos y un
-    total en cero: aquí no hay ninguna división por cero que esperar.
-    """
-    calificaciones = list(calificaciones)
     return {
-        "agentes": _agrupar(calificaciones, CAMPO_AGENTE, ""),
-        "campanas": _agrupar(calificaciones, CAMPO_CAMPANA, SIN_CAMPANA),
-        "total": _resumen("total", calificaciones),
+        "id": fila_id,
+        "agente": fila.get("agente"),
+        "campaña": fila.get("campaña"),
+        "nota": nota,
+        "estado": estado,
+        "criticos_fallidos": criticos_fallidos,
+        "revision": bool(motivos_revision),
+        "motivos_revision": motivos_revision,
     }
 
 
-def _agrupar(calificaciones: list[dict], campo: str, vacio: str) -> list[dict]:
-    grupos: dict[str, list[dict]] = {}
-    for calificacion in calificaciones:
-        clave = str(calificacion.get(campo) or "").strip() or vacio
-        grupos.setdefault(clave, []).append(calificacion)
-    # Peor nota primero: un informe de calidad se lee por abajo. La clave
-    # desempata para que el orden no dependa del orden de entrada.
-    return sorted(
-        (_resumen(clave, filas) for clave, filas in grupos.items()),
-        key=lambda resumen: (resumen["nota_media"], resumen["clave"]),
-    )
+def puntuar_lote(rubric: dict, filas: list) -> tuple:
+    """Puntúa todas las filas `estado == "ok"` de `filas`. Devuelve `(puntuadas, sin_nota)`."""
+    puntuadas = []
+    sin_nota = 0
+    for fila in filas:
+        if fila.get("estado") == "ok":
+            puntuadas.append(puntuar(rubric, fila))
+        else:
+            sin_nota += 1
+    return puntuadas, sin_nota
 
 
-def _resumen(clave: str, calificaciones: list[dict]) -> dict:
-    total = len(calificaciones)
-    resumen = {
-        "clave": clave,
-        "interacciones": total,
-        "nota_media": 0.0,
-        "nota_minima": 0.0,
-        "nota_maxima": 0.0,
-        "criticas": 0,
-        "porcentaje_criticas": 0.0,
-        "suspensos": 0,
-        "porcentaje_suspensos": 0.0,
-        "cola": 0,
-        "porcentaje_cola": 0.0,
-        "muestra_suficiente": total >= MUESTRA_MINIMA,
-    }
-    if not total:
-        return resumen
+def agregar(rubric: dict, filas: list, clave: str) -> dict:
+    """Agrega `filas` por `clave` ("agente" o "campaña"). Devuelve `grupo -> estadísticas`.
 
-    notas = [float(c.get("nota", 0.0)) for c in calificaciones]
-    criticas = sum(1 for c in calificaciones if c.get("criticas_falladas"))
-    suspensos = sum(1 for c in calificaciones if c.get("estado") == ESTADO_SUSPENSO)
-    cola = sum(1 for c in calificaciones if c.get("revisar"))
-    resumen.update(
-        {
-            "nota_media": round(sum(notas) / total, 2),
-            "nota_minima": round(min(notas), 2),
-            "nota_maxima": round(max(notas), 2),
-            "criticas": criticas,
-            "porcentaje_criticas": _porcentaje(criticas, total),
-            "suspensos": suspensos,
-            "porcentaje_suspensos": _porcentaje(suspensos, total),
-            "cola": cola,
-            "porcentaje_cola": _porcentaje(cola, total),
+    Cada grupo tiene `{n, sin_nota, nota_media, pct_criticas, cola}`: `n` son
+    las interacciones puntuadas, `nota_media` es `None` si `n == 0`,
+    `pct_criticas` es el porcentaje de interacciones puntuadas con al menos
+    un ítem crítico fallido (0,0 si `n == 0`) y `cola` cuenta las que quedan
+    en revisión. Un grupo sin filas `ok` aparece igual, con `n == 0`.
+    """
+    if clave not in ("agente", "campaña"):
+        raise ScoringError(f"clave de agregación inválida: '{clave}'")
+
+    grupos = {}
+    for fila in filas:
+        grupo = fila.get(clave)
+        stats = grupos.setdefault(
+            grupo, {"n": 0, "sin_nota": 0, "notas": [], "criticas": 0, "cola": 0}
+        )
+        if fila.get("estado") == "ok":
+            resultado = puntuar(rubric, fila)
+            stats["n"] += 1
+            stats["notas"].append(resultado["nota"])
+            if resultado["criticos_fallidos"]:
+                stats["criticas"] += 1
+            if resultado["revision"]:
+                stats["cola"] += 1
+        else:
+            stats["sin_nota"] += 1
+
+    salida = {}
+    for grupo, stats in grupos.items():
+        n = stats["n"]
+        salida[grupo] = {
+            "n": n,
+            "sin_nota": stats["sin_nota"],
+            "nota_media": round(sum(stats["notas"]) / n, 1) if n else None,
+            "pct_criticas": round(100 * stats["criticas"] / n, 1) if n else 0.0,
+            "cola": stats["cola"],
         }
-    )
-    return resumen
-
-
-def _porcentaje(parte: int, total: int) -> float:
-    return round(100.0 * parte / total, 2) if total else 0.0
-
-
-def describir(calificacion: dict) -> str:
-    """Una línea legible para el registro del lote y para el informe."""
-    partes = [
-        f"{calificacion.get('id') or 'sin id'}: {calificacion['nota']:.1f}",
-        calificacion["estado"],
-    ]
-    if calificacion["criticas_falladas"]:
-        partes.append("críticas: " + ", ".join(calificacion["criticas_falladas"]))
-    if calificacion["revisar"]:
-        partes.append("a revisión: " + ", ".join(calificacion["items_a_revisar"]))
-    return " · ".join(partes)
+    return salida
