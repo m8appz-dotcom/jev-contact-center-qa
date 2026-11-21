@@ -1,0 +1,8 @@
+{
+  "mode": "offline_fake_client",
+  "source": "tests/fixtures/mini.csv",
+  "interactions": 3,
+  "applicationGeneratedReport": true,
+  "liveProviderCalls": 0,
+  "qualityBenchmark": false
+}

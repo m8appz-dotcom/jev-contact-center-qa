@@ -6,6 +6,18 @@ This Python CLI combines transcript redaction, a structured Jev model request, d
 
 [Guía completa en español](README.es.md)
 
+## Demonstration
+
+![Application output from the documented walkthrough](docs/images/demo.png)
+
+See the [reproducible walkthrough and its validation scope](docs/DEMO.md).
+
+## Project direction and use
+
+[Kenneth Yepez](https://github.com/kennethyepez) directs product requirements, architecture, integration, validation, and deployment. AI coding agents implement code under his direction.
+
+See [use and licensing](LICENSE.md), [contributing](CONTRIBUTING.md), and [security reporting](SECURITY.md).
+
 ## Architecture
 
 ```text
