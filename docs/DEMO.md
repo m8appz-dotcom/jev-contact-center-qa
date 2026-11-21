@@ -23,6 +23,6 @@ Open `http://127.0.0.1:8000/sample-report.html`.
 
 ## What the example establishes
 
-The actual audit and report CLI processes the committed mini CSV with --fake. The report is an illustrative FakeJev output, not a measured model result or a customer interaction. Three fixture interactions are processed. The separately committed evaluation describes its synthetic-data and single-annotator limitations.
+The actual audit and report CLI processes the committed mini CSV with --fake. The visible report is the banca_tarjetas campaign with one interaction; the CLI processes three fixture interactions across three campaigns. Scores and displayed costs are illustrative FakeJev output, not measured model results, actual provider charges, or customer interactions. The separately committed evaluation describes its synthetic-data and single-annotator limitations.
 
 The screenshot records the visible output of this workflow. It does not establish behavior outside the stated scope. Generated evidence and source examples are preserved alongside the walkthrough; current CI runs provide commit-specific checks.
