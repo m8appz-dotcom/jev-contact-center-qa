@@ -1,3 +1,4 @@
+import { engineAction, showEngineResult } from "./engine-client.js";
 import {
   $,
   $$,
@@ -113,7 +114,7 @@ function render() {
         ["report", "Review report"],
       ],
       view,
-    )}<nav class="jev-filters" aria-label="Campaign filter">${[["all", "All campaigns"], ...Object.entries(campaigns)].map(([id, title]) => `<button data-campaign="${id}" aria-pressed="${campaign === id}"><span aria-hidden="true">[${campaign === id ? "×" : " "}]</span> ${title}</button>`).join("")}</nav><div class="jev-tools"><label>Search conversations<input id="conversation-search" type="search" value="${esc(query)}" placeholder="Agent, phrase or campaign"></label><label>Review status<select id="review-status"><option value="all" ${status === "all" ? "selected" : ""}>All conversations</option><option value="pending" ${status === "pending" ? "selected" : ""}>To review</option><option value="reviewed" ${status === "reviewed" ? "selected" : ""}>Reviewed</option></select></label><button class="text-button" data-export ${!reviewed ? "disabled" : ""}>Export reviews ↓</button></div><div class="jev-scope"><span>Authored conversations · English adaptations</span><span>${reviewed} of 3 reviewed in this browser</span></div><main id="main" class="jev-index">${view === "report" ? report(visible) : visible.length ? visible.map((c) => row(c)).join("") : '<div class="empty"><h2>No conversations match.</h2><p>Change the search or reset the filters.</p><button class="text-button" data-reset>Reset filters</button></div>'}</main><footer class="review-footer"><span>JEV Contact Center QA</span><span>${scope}</span></footer></div>`,
+    )}<nav class="jev-filters" aria-label="Campaign filter">${[["all", "All campaigns"], ...Object.entries(campaigns)].map(([id, title]) => `<button data-campaign="${id}" aria-pressed="${campaign === id}"><span aria-hidden="true">[${campaign === id ? "×" : " "}]</span> ${title}</button>`).join("")}</nav><div class="jev-tools"><label>Search conversations<input id="conversation-search" type="search" value="${esc(query)}" placeholder="Agent, phrase or campaign"></label><label>Review status<select id="review-status"><option value="all" ${status === "all" ? "selected" : ""}>All conversations</option><option value="pending" ${status === "pending" ? "selected" : ""}>To review</option><option value="reviewed" ${status === "reviewed" ? "selected" : ""}>Reviewed</option></select></label><button data-engine-evaluate ${!selected ? "disabled" : ""}>Evaluate selected conversation</button><button class="text-button" data-export ${!reviewed ? "disabled" : ""}>Export reviews ↓</button></div><div class="jev-scope"><span>Authored conversations · English adaptations</span><span>${reviewed} of 3 reviewed in this browser</span></div><main id="main" class="jev-index">${view === "report" ? report(visible) : visible.length ? visible.map((c) => row(c)).join("") : '<div class="empty"><h2>No conversations match.</h2><p>Change the search or reset the filters.</p><button class="text-button" data-reset>Reset filters</button></div>'}</main><footer class="review-footer"><span>JEV Contact Center QA</span><span>${scope}</span></footer></div>`,
     () => {
       $$("[data-tab]").forEach(
         (b) =>
@@ -163,6 +164,14 @@ function render() {
             render();
           }),
       );
+      $("[data-engine-evaluate]").onclick = (e) =>
+        engineAction(e.currentTarget, "evaluate", { id: selected }, (job) =>
+          showEngineResult(
+            "JEV evaluation · " + job.result.conversation,
+            job,
+            `<p>${job.result.score}/100 · ${esc(job.result.outcome)}</p><p>${esc(job.result.scope)}</p><table><thead><tr><th>Criterion</th><th>Assessment</th><th>Confidence</th></tr></thead><tbody>${job.result.criteria.map((c) => `<tr><td>${esc(c.label)}${c.critical ? " · critical" : ""}</td><td>${c.meets ? "Meets" : "Needs attention"}${c.needsReview ? " · review" : ""}</td><td>${Math.round(c.confidence * 100)}%</td></tr>`).join("")}</tbody></table>`,
+          ),
+        );
       $("[data-export]").onclick = exportReviews;
       $("#review-form")?.addEventListener("input", (e) => {
         drafts[selected] = Object.fromEntries(new FormData(e.currentTarget));

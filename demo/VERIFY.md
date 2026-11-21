@@ -15,3 +15,9 @@ Corrections during browser review included an editor/navigation overlap in Longf
 Automated checks reject unsigned workspace access, foreign-origin mutations, invalid registration, replayed challenges and unknown credentials. Real holder registration/login/recovery remains pending. Full accessibility certification, physical mobile-device testing, paid/live AI calls, microphone/audio acceptance and finished-video acceptance are not claimed.
 
 Scope limit: The conversations are authored examples. No recorded customer audio, real customer information or live model evaluations are included.
+
+## Connected engine update
+
+Calls the repository JevClient, English support rubric, response parser and weighted scoring engine. The browser selects one of three committed authored examples; the server redacts names before sending one real request to `jev-latest`. Results preserve model confidence and review flags. Manual reviews remain independent.
+
+Gateway negative tests cover origin, protected actions, session ownership, unsupported input, invalid service credentials, safe errors and path containment. Physical holder passkey acceptance remains pending; it is never inferred from these tests.

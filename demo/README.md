@@ -2,6 +2,8 @@
 
 Filter or search the three authored conversations. Rate tone, resolution and closing. Add evidence when a criterion needs work. Save the review, inspect the report, and export CSV. Incomplete drafts survive navigation.
 
+See [ENGINES.md](ENGINES.md) for the actual engine connection, additional runtime setup, credentials and acceptance limits.
+
 ## Run locally
 
 Requires Node.js 22 or newer and npm. From the repository root:
@@ -33,7 +35,7 @@ The included server integrates FIDO2/WebAuthn for optional private workspace cop
 
 ## Boundaries
 
-The conversations are authored examples. No recorded customer audio, real customer information or live model evaluations are included.
+The conversations are authored examples. Live JEV evaluation is optional, server-configured and passkey protected. No recorded customer audio or real customer information is included.
 
 The local server supports its documented localhost origin. This change does not deploy a public service or make these local workspaces production-ready. A public deployment needs a stable HTTPS origin/RP ID, durable protected storage, retention policy and completed holder acceptance. No provider keys or production data are included. No Spark data or services are touched.
 
