@@ -3,3 +3,9 @@ __pycache__/
 .venv/
 salidas/
 *.local.json
+
+.pytest_cache/
+
+test-results/
+
+playwright-report/
