@@ -84,3 +84,7 @@ High agreement on mostly passing examples can hide poor failure detection. The f
 - The current rubric targets Spanish support calls. Review the Spanish guide's data-handling and pilot prerequisites before using customer transcripts.
 
 The next evaluation should measure failure recall and reviewer workload on an authorized pilot dataset. See [the project plan](docs/plan.md) and [the complete operating guide](README.es.md).
+
+## Reviewed delivery
+
+See the [delivery workflow](docs/DELIVERY.md) for acceptance criteria, commit boundaries, identified AI/human review, protected integration, and source provenance.

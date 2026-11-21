@@ -1,7 +1,10 @@
 name: JEV QA offline checks
 on:
   push:
+    branches: [mvp-qa]
   pull_request:
+    branches: [mvp-qa]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 permissions:
   contents: read
 jobs:
