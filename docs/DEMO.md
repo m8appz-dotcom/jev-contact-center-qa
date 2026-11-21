@@ -10,7 +10,7 @@ Use an isolated checkout and environment.
 
 ```bash
 python -m unittest discover -s tests -v
-python tools/create_demo.py
+python tools/create_demo.py --runs 5
 ```
 
 Serve the generated files locally:
@@ -19,10 +19,10 @@ Serve the generated files locally:
 python -m http.server 8000 --bind 127.0.0.1 --directory docs/examples
 ```
 
-Open `http://127.0.0.1:8000/sample-report.html`.
+Open `http://127.0.0.1:8000/walkthrough.html`.
 
 ## What the example establishes
 
-The actual audit and report CLI processes the committed mini CSV with --fake. The visible report is the banca_tarjetas campaign with one interaction; the CLI processes three fixture interactions across three campaigns. Scores and displayed costs are illustrative FakeJev output, not measured model results, actual provider charges, or customer interactions. The separately committed evaluation describes its synthetic-data and single-annotator limitations.
+The actual audit and report CLI processes the committed mini CSV with --fake and publishes all three campaign reports through an index. The earlier sample-report.html remains available. Scores, tokens, and displayed prices are illustrative FakeJev output; the recorded timing samples measure actual local CLI execution. They do not measure model quality, provider latency, customer impact, or actual provider charges. See the [measured case study](CASE-STUDY.md) and its raw evidence. The original single-campaign screenshot below remains a valid example of one generated report; the new index links all campaigns.
 
 The screenshot records the visible output of this workflow. It does not establish behavior outside the stated scope. Generated evidence and source examples are preserved alongside the walkthrough; current CI runs provide commit-specific checks.
