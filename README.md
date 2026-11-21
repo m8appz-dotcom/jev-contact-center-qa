@@ -88,3 +88,7 @@ The next evaluation should measure failure recall and reviewer workload on an au
 ## Reviewed delivery
 
 See the [delivery workflow](docs/DELIVERY.md) for acceptance criteria, commit boundaries, identified AI/human review, protected integration, and source provenance.
+
+## Measured workflow case
+
+The [complete campaign reporting case](docs/CASE-STUDY.md) records actual repeated local CLI execution, links all three authored-fixture reports, and distinguishes those measurements from model quality or customer outcomes.

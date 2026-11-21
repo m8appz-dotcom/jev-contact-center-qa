@@ -1,8 +1,57 @@
 {
   "mode": "offline_fake_client",
   "source": "tests/fixtures/mini.csv",
+  "sourceSha256": "fbbf4191f009e79ef6f35d4ce1c026042e3fe4f80adb9b173dc27967bcdf31a8",
   "interactions": 3,
+  "campaigns": {
+    "banca_tarjetas": 1,
+    "seguros_salud": 1,
+    "telco_hogar": 1
+  },
+  "reportFiles": [
+    "informe_banca_tarjetas.html",
+    "informe_seguros_salud.html",
+    "informe_telco_hogar.html"
+  ],
   "applicationGeneratedReport": true,
   "liveProviderCalls": 0,
-  "qualityBenchmark": false
+  "billedProviderCostUsd": 0,
+  "qualityBenchmark": false,
+  "customerImpactClaimed": false,
+  "measurement": {
+    "runs": 5,
+    "python": "3.13.17",
+    "system": "Windows",
+    "samples": [
+      {
+        "auditSeconds": 0.26287049998063594,
+        "reportSeconds": 0.13849360001040623,
+        "totalSeconds": 0.40136409999104217
+      },
+      {
+        "auditSeconds": 0.2620164999971166,
+        "reportSeconds": 0.14401019999058917,
+        "totalSeconds": 0.4060266999877058
+      },
+      {
+        "auditSeconds": 0.2648469000123441,
+        "reportSeconds": 0.14601009999751113,
+        "totalSeconds": 0.41085700000985526
+      },
+      {
+        "auditSeconds": 0.26175900001544505,
+        "reportSeconds": 0.13734050001949072,
+        "totalSeconds": 0.3990995000349358
+      },
+      {
+        "auditSeconds": 0.2695256999868434,
+        "reportSeconds": 0.1446334000211209,
+        "totalSeconds": 0.4141591000079643
+      }
+    ],
+    "medianSeconds": 0.4060266999877058,
+    "minSeconds": 0.3990995000349358,
+    "maxSeconds": 0.4141591000079643,
+    "scope": "Actual local CLI startup, fake audit, CSV writing, and HTML reports; excludes live inference and customer operations."
+  }
 }

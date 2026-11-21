@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calidad · seguros_salud</title>
+<style>
+:root{--fondo:#fbfaf7;--texto:#1d1d1b;--suave:#6b6a64;--linea:#e4e1d8;--caja:#fff;--bien:#2f6f4f;--mal:#a3362a;--acento:#35527a}
+@media (prefers-color-scheme:dark){:root{--fondo:#17181a;--texto:#ecebe6;--suave:#a19f97;--linea:#33342f;--caja:#1f2023;--bien:#7cc49c;--mal:#ef8a7c;--acento:#9db8e0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fondo);color:var(--texto);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:32px 16px 48px}
+h1{font-size:28px;margin:0 0 4px}
+h2{font-size:19px;margin:36px 0 8px;padding-top:16px;border-top:1px solid var(--linea)}
+h3{font-size:15px;margin:20px 0 6px}
+.sobre{margin:0;color:var(--acento);font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.meta,.vacio,footer,section>p{color:var(--suave)}
+.resumen{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:24px 0 0}
+.resumen div{background:var(--caja);border:1px solid var(--linea);border-radius:8px;padding:12px 14px}
+.resumen dt{color:var(--suave);font-size:13px}
+.resumen dd{margin:2px 0 0;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.tabla{overflow-x:auto;border:1px solid var(--linea);border-radius:8px;background:var(--caja)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--linea);white-space:nowrap}
+th{font-size:13px;color:var(--suave);font-weight:600}
+tr:last-child td{border-bottom:0}
+.estado{font-weight:600}.estado.bien{color:var(--bien)}.estado.mal{color:var(--mal)}
+footer{margin-top:40px;font-size:13px}
+</style>
+</head>
+<body><section style="padding:20px 24px;background:#f1f5f9;color:#172033;border-radius:8px;margin:16px 0"><strong>Offline workflow example</strong><p>Authored sample conversations. FakeJev scores, tokens, and displayed prices illustrate the reporting workflow. No live provider was called or billed; this is not a model-quality measurement.</p></section>
+<main>
+<header>
+<p class="sobre">Auditoría de calidad con Jev</p>
+<h1>seguros_salud</h1>
+<p class="meta">Periodo 2026-08-05 a 2026-08-05 · rúbrica soporte_es v1.0 · aprueba con 70 y sin críticas falladas · generado 2026-11-21</p>
+</header>
+<dl class="resumen"><div><dt>Interacciones</dt><dd>1</dd></div><div><dt>Nota media</dt><dd>55,0</dd></div><div><dt>Con crítica fallada</dt><dd>100,0 %</dd></div><div><dt>Suspensos</dt><dd>100,0 %</dd></div><div><dt>En cola de revisión</dt><dd>100,0 %</dd></div></dl>
+<section><h2>Ranking de agentes</h2><p>Mejor nota primero. La columna de críticas es la que manda: una nota alta con una crítica fallada no es un buen trabajo.</p><p class="vacio">Ningún agente tiene todavía interacciones suficientes para el ranking.</p><h3>Con muestra insuficiente</h3><p>Menos de 5 interacciones auditadas: su promedio todavía es una anécdota y no entra en el ranking.</p><div class="tabla"><table><thead><tr><th>Agente</th><th>Interacciones</th><th>Nota media</th><th>Con crítica fallada</th><th>Suspensos</th><th>En cola</th></tr></thead><tbody><tr><td>Jhoanna Pérez</td><td>1</td><td>55,0</td><td>100,0 %</td><td>100,0 %</td><td>1</td></tr></tbody></table></div></section><section><h2>Peores interacciones</h2><p>Las que fallaron una crítica van primero; después, la nota más baja.</p><div class="tabla"><table><thead><tr><th>Interacción</th><th>Agente</th><th>Fecha</th><th>Nota</th><th>Estado</th><th>Críticas falladas</th><th>Riesgo</th><th>Motivo</th></tr></thead><tbody><tr><td>MINI-3</td><td>Jhoanna Pérez</td><td>2026-08-05</td><td>55,0</td><td><span class="estado mal">suspenso</span></td><td>compromiso_realista</td><td>Alto</td><td>informacion</td></tr></tbody></table></div></section><section><h2>Cola de revisión (1)</h2><p>Lo que el modelo no vio claro. Se revisa en este orden: primero las que fallaron una crítica, después las de peor nota.</p><div class="tabla"><table><thead><tr><th>Interacción</th><th>Agente</th><th>Nota</th><th>Estado</th><th>Ítems a revisar</th><th>Motivo</th></tr></thead><tbody><tr><td>MINI-3</td><td>Jhoanna Pérez</td><td>55,0</td><td><span class="estado mal">suspenso</span></td><td>saludo, verifica_identidad, diagnostico, solucion_o_derivacion, tono_respetuoso, compromiso_realista, cierre</td><td>confianza baja, probabilidad ambigua</td></tr></tbody></table></div></section><section><h2>Coste de Jev del periodo</h2><div class="tabla"><table><thead><tr><th>Concepto</th><th>Valor</th></tr></thead><tbody><tr><td>Interacciones auditadas</td><td>1</td></tr><tr><td>Sin auditar (error o demasiado largas)</td><td>0</td></tr><tr><td>Tokens de entrada</td><td>1.234</td></tr><tr><td>Coste</td><td>US$ 0,000052</td></tr><tr><td>Coste por 1.000 interacciones</td><td>US$ 0,0518</td></tr></tbody></table></div><p>Jev cobra solo los tokens de entrada (US$ 42 por cada mil millones).</p></section>
+<footer>Las notas las pone un modelo. La cola de revisión existe para que una persona mire lo que el modelo no vio claro; ninguna decisión sobre un agente debería tomarse solo con este informe.</footer>
+</main>
+</body>
+</html>
