@@ -6,15 +6,15 @@ This Python CLI combines transcript redaction, a structured Jev model request, d
 
 [Guía completa en español](README.es.md)
 
-## Interactive English demo
+## See the workspace
 
-[Run the interactive demo](demo/README.md) to explore the approved product interface, local example workflows and downloadable outputs. The isolated demo uses English throughout and preserves the original application below. See its README for the exact example boundaries and passkey acceptance status.
+A conversation review index with evidence notes, resumable drafts and campaign reports.
 
-## Demonstration
+![The current JEV Contact Center QA workspace](docs/images/workspace-desktop.jpg)
 
-![Application output from the documented walkthrough](docs/images/demo.png)
+[Run locally](demo/README.md) · [Desktop and phone views](docs/PRODUCT.md)
 
-See the [reproducible walkthrough and its validation scope](docs/DEMO.md).
+The local example and the connected engine have separate setup instructions and documented limits.
 
 ## Project direction and use
 
@@ -67,6 +67,8 @@ The CLI keeps its Spanish command and column names. Input CSV columns are `id`, 
 For a real model run, supply your own `TYPESAFE_API_KEY` through the environment and omit `--fake`. Real auditing sends redacted transcripts to the provider and incurs API usage. Reporting and comparison operate on local files.
 
 ## Recorded evaluation
+
+**Evaluation status: experimental.** The published Spanish results do not establish reliable autonomous scoring. The translated English demo needs its own evaluation. See [the independent evaluation plan](docs/EVALUATION-PLAN.md).
 
 The [September 21, 2026 report](data/eval/informe.md) records a live model run on **40 authored synthetic conversations**, labeled by one annotator.
 
