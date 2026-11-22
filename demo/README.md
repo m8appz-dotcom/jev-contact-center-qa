@@ -27,6 +27,8 @@ All UI labels, accessibility text, demo conversation/script content and new expo
 
 ## Local work and private access
 
+Workspace exports and private copies include both completed reviews and unfinished ratings/evidence. Restore also accepts earlier review-only exports. Filtering clears a hidden selection; choose a visible conversation before running a live evaluation.
+
 Guest exploration saves drafts in this browser's local storage. It does not require a model account. Use **Private workspace → Export workspace** for a recoverable JSON copy; restore a compatible export and undo that restore if needed. Local browser storage is not a secure vault. Use authored examples, not confidential records.
 
 The included server integrates FIDO2/WebAuthn for optional private workspace copies. It stores public credential material and workspace JSON in ignored **.demo-state/workspaces.json**, outside the static directory. It never receives a PIN, fingerprint or private key. Registration and login require user verification; the server validates the RP ID and origin, consumes challenges once, and uses HttpOnly/Secure/SameSite sessions. Add a second passkey after signing in and keep an exported workspace copy.
