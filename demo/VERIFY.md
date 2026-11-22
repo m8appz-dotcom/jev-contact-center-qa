@@ -2,7 +2,7 @@
 
 The five-demo implementation was exercised through the Codex browser MCP in hidden tabs on X. The approved screens remain the baseline. No desktop focus or native keyboard input was used.
 
-Verified for this demo:
+Authored workspace checks:
 
 - Filter or search the three authored conversations.
 - Rate tone, resolution and closing. Add evidence when a criterion needs work.
@@ -12,12 +12,14 @@ Shared checks: English visible/accessible content; desktop, narrow and intermedi
 
 Corrections during browser review included an editor/navigation overlap in Longform, the narrow JEV status selector, preservation of incomplete JEV review notes and placement of M8 replay controls. Original source images were not modified.
 
-Automated checks reject unsigned workspace access, foreign-origin mutations, invalid registration, replayed challenges and unknown credentials. Real holder registration/login/recovery remains pending. Full accessibility certification, physical mobile-device testing, paid/live AI calls, microphone/audio acceptance and finished-video acceptance are not claimed.
+Automated checks reject unsigned workspace access, foreign-origin mutations, invalid registration, replayed challenges and unknown credentials. Real holder registration/login/recovery remains pending. Full accessibility certification, physical mobile-device testing, microphone/audio acceptance and finished-film acceptance are not claimed. Connected engine checks below have their stated scope.
 
-Scope limit: The conversations are authored examples. No recorded customer audio, real customer information or live model evaluations are included.
+Scope limit: The conversations are committed authored examples. One real model evaluation used an authored example and the English rubric; no customer recording or private customer information was used.
 
 ## Connected engine update
 
 Calls the repository JevClient, English support rubric, response parser and weighted scoring engine. The browser selects one of three committed authored examples; the server redacts names before sending one real request to `jev-latest`. Results preserve model confidence and review flags. Manual reviews remain independent.
 
 Gateway negative tests cover origin, protected actions, session ownership, unsupported input, invalid service credentials, safe errors and path containment. Physical holder passkey acceptance remains pending; it is never inferred from these tests.
+
+Runtime acceptance: The native evaluator produced a real scored response for an authored example. The browser showed the passkey gate for human evaluation; holder enrollment was not simulated.
