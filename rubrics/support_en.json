@@ -1,0 +1,118 @@
+{
+  "id": "support_en",
+  "nombre": "English contact center support",
+  "version": "1.0",
+  "idioma": "en",
+  "descripcion": "Eight weighted support criteria. Critical failures override the overall score.",
+  "items": [
+    {
+      "id": "saludo",
+      "pregunta": "Does the agent introduce the company and their own name at the start?",
+      "criterios": {
+        "true": "The first agent turn includes the company and the agent name.",
+        "false": "The greeting, company name, or agent name is missing."
+      },
+      "peso": 5,
+      "critico": false,
+      "label": "Greeting"
+    },
+    {
+      "id": "verifica_identidad",
+      "pregunta": "Does the agent request an identity check before sharing or changing account information?",
+      "criterios": {
+        "true": "The agent requests a verification detail first, or no account information is discussed.",
+        "false": "The agent shares balances, personal details, usage, or changes without requesting verification."
+      },
+      "peso": 10,
+      "critico": true,
+      "label": "Identity verification"
+    },
+    {
+      "id": "escucha_activa",
+      "pregunta": "Does the agent paraphrase the customer problem and ask for confirmation?",
+      "criterios": {
+        "true": "The agent summarizes the problem in their own words and asks for confirmation.",
+        "false": "The agent moves directly to questions or a solution without confirming the problem."
+      },
+      "peso": 10,
+      "critico": false,
+      "label": "Active listening"
+    },
+    {
+      "id": "diagnostico",
+      "pregunta": "Does the agent ask a specific diagnostic question before proposing a solution?",
+      "criterios": {
+        "true": "The agent asks about symptoms, dates, equipment, amounts, or attempted steps first.",
+        "false": "The agent proposes a solution without asking a specific diagnostic question."
+      },
+      "peso": 15,
+      "critico": false,
+      "label": "Diagnosis"
+    },
+    {
+      "id": "solucion_o_derivacion",
+      "pregunta": "Does the conversation end with a solution or an escalation with a named team and timeframe?",
+      "criterios": {
+        "true": "The case is resolved, or the agent gives a concrete team and response timeframe.",
+        "false": "There is no resolution and no concrete team or response timeframe."
+      },
+      "peso": 20,
+      "critico": false,
+      "label": "Resolution or escalation"
+    },
+    {
+      "id": "tono_respetuoso",
+      "pregunta": "Does the agent treat the customer respectfully throughout the conversation?",
+      "criterios": {
+        "true": "The agent stays courteous and calm and allows the customer to speak.",
+        "false": "The agent blames, belittles, repeatedly interrupts, raises their voice, or abruptly hangs up."
+      },
+      "peso": 15,
+      "critico": true,
+      "label": "Respectful tone"
+    },
+    {
+      "id": "compromiso_realista",
+      "pregunta": "Are the agent commitments consistent with the policy stated in the conversation?",
+      "criterios": {
+        "true": "The agent makes supported commitments and states uncertainty when approval is needed.",
+        "false": "The agent guarantees an outcome outside their control or contradicts a stated policy."
+      },
+      "peso": 15,
+      "critico": true,
+      "label": "Realistic commitments"
+    },
+    {
+      "id": "cierre",
+      "pregunta": "Does the agent ask whether the customer needs anything else and say goodbye?",
+      "criterios": {
+        "true": "Both the further-help question and a farewell are present.",
+        "false": "Either the further-help question or farewell is missing."
+      },
+      "peso": 10,
+      "critico": false,
+      "label": "Closing"
+    }
+  ],
+  "riesgo": {
+    "pregunta": "What level of business risk does this conversation leave?",
+    "niveles": [
+      "None: the customer is served with no unresolved issue or exposure.",
+      "Low: presentation issues remain, but the customer is served and threatens no action.",
+      "Medium: the customer remains unresolved or dissatisfied and may call again or complain.",
+      "High: mistreatment, unsupported commitments, or unverified handling of private information could lead to a formal complaint."
+    ]
+  },
+  "motivo": {
+    "pregunta": "What is the primary reason for this contact?",
+    "opciones": {
+      "billing": "Charges, invoices, refunds, or payments.",
+      "technical": "Outages, slow service, or equipment faults.",
+      "activation": "New accounts, installations, or upgrades.",
+      "cancellation": "Cancellation, withdrawal, or downgrade.",
+      "complaint": "A complaint about treatment or a previous failure.",
+      "information": "Information without an associated transaction.",
+      "otro": "None of the other contact reasons apply."
+    }
+  }
+}
