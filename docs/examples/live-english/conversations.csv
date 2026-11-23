@@ -1,0 +1,20 @@
+"id","agente","campaña","fecha","texto"
+"MINI-1","Rosa Delgado","Home internet","2026-08-03","Agent: Home Internet, good morning. This is Rosa Delgado.
+Customer: Good morning. My internet keeps disconnecting.
+Agent: Thank you. What have you tried so far?
+Customer: I restarted the modem twice. I pay $19.90 a month.
+Agent: I can schedule a technician for August 15. Is there anything else I can help with?
+Customer: No, thank you.
+Agent: Have a good day."
+"MINI-2","Kevin Morales","Bank cards","2026-08-04","Agent: Hello?
+Customer: There is an unfamiliar charge for $342.80.
+Agent: They never refund that. Do not get your hopes up.
+Customer: I would like to speak with a supervisor.
+Agent: There is no supervisor. I have to hang up."
+"MINI-3","Jhoanna Pérez","Health insurance","2026-08-05","Agent: Good morning. This is Jhoanna Pérez from Andean Insurance.
+Customer: I would like to know whether physical therapy is covered.
+Agent: Is the treatment for an injury?
+Customer: Yes, a knee injury.
+Agent: The example policy covers seventy percent after a $45 deductible. I can send you the details. Is there anything else?
+Customer: No, thank you.
+Agent: Take care."

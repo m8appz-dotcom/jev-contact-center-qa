@@ -1,12 +1,20 @@
 # JEV Contact Center QA
 
-Evaluate Spanish support-call transcripts against a fixed quality rubric, route uncertain cases to human review, and produce campaign reports.
+Evaluate support-call transcripts against a fixed quality rubric, route uncertain cases to human review, and produce campaign reports.
 
 This Python CLI combines transcript redaction, a structured Jev model request, deterministic scoring, and comparison against human labels. It uses the Python standard library and includes an offline fake client.
 
 [Guía completa en español](README.es.md)
 
-## See the workspace
+## See the original engine at work
+
+[Explore the native campaign reports](https://kennethyepez.com/projects/jev-contact-center-qa) · [Reproduce the English workflow](docs/NATIVE-DEMO.md)
+
+![JEV's original campaign report, generated from a real model run](docs/images/native-report-desktop.jpg)
+
+The original Python application audited three existing authored conversations with the live JEV model, generated one report per campaign and resumed without repeating completed requests. English reports retain its original layout, weighted scoring, critical-failure rules and uncertainty queue. These examples demonstrate the connected workflow; they do not establish model accuracy or customer outcomes.
+
+## Review interface
 
 A conversation review index with evidence notes, resumable drafts and campaign reports.
 
@@ -14,7 +22,7 @@ A conversation review index with evidence notes, resumable drafts and campaign r
 
 [Run locally](demo/README.md) · [Desktop and phone views](docs/PRODUCT.md)
 
-The local example and the connected engine have separate setup instructions and documented limits.
+The review interface remains available separately. Its three manual ratings are not the engine's eight-item rubric. The local example and connected actions have separate setup instructions and documented limits.
 
 ## Project direction and use
 

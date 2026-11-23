@@ -1,5 +1,7 @@
 # Complete campaign reporting: a measured offline case
 
+The original application now also has a [connected English example](NATIVE-DEMO.md), with three actual JEV assessments, all native campaign reports and verified resumption. [Explore that result](https://kennethyepez.com/projects/jev-contact-center-qa). Its live model output remains separate from the offline measurements below; neither is an accuracy benchmark.
+
 ## Problem and change
 
 The prior walkthrough ran three authored interactions across three campaigns but published only the first HTML report. A reviewer had to reproduce the CLI to inspect the other two campaigns.

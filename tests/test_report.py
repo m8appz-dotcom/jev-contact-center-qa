@@ -105,6 +105,51 @@ class Caso(unittest.TestCase):
         self.carpeta = tempfile.mkdtemp()
 
 
+class TestEnglishReport(Caso):
+    def setUp(self):
+        super().setUp()
+        self.rubrica["idioma"] = "en"
+
+    def test_english_report_keeps_native_critical_failure_and_sample_rules(self):
+        self.rubrica["items"][0]["peso"] = 10
+        self.rubrica["items"][1]["peso"] = 90
+        source = escribir_resultados([fila("critical", respeto=0.05)], self.rubrica)
+        report = leer(generar_informes(source, self.carpeta, self.rubrica)[0])
+        self.assertIn('<html lang="en">', report)
+        self.assertIn("Agent ranking", report)
+        self.assertIn("Insufficient sample", report)
+        self.assertIn("Needs attention", report)
+        self.assertIn("90.0", report)
+        self.assertNotIn("90,0", report)
+        self.assertIn("Failed interactions", report)
+        self.assertNotIn("Below threshold", report)
+        self.assertIn("do not make personnel decisions", report)
+
+    def test_uncertain_judgment_remains_in_review_queue_and_errors_unscored(self):
+        source = escribir_resultados([
+            fila("uncertain", respeto=0.49),
+            fila("error-row", estado="error", error="Provider unavailable"),
+        ], self.rubrica)
+        report = leer(generar_informes(source, self.carpeta, self.rubrica)[0])
+        self.assertIn("Human review queue (1)", report)
+        self.assertIn("Low model confidence", report)
+        self.assertIn("Ambiguous probability", report)
+        self.assertIn("Unscored interactions", report)
+        self.assertIn("Provider unavailable", report)
+
+    def test_english_localization_escapes_data_without_translating_it(self):
+        source = escribir_resultados([
+            fila("safe", agente='Ranking de agentes<script>alert(1)</script>',
+                 campana='<img src=x onerror=alert(1)>'),
+        ], self.rubrica)
+        report = leer(generar_informes(source, self.carpeta, self.rubrica, note='<script>note</script>')[0])
+        self.assertIn("&lt;script&gt;note&lt;/script&gt;", report)
+        self.assertNotIn("<script>", report)
+        self.assertNotIn("<img src=x", report)
+        self.assertIn("Ranking de agentes&lt;script&gt;", report)
+        self.assertIn("&lt;img src=x onerror=alert(1)&gt;", report)
+
+
 class TestLectura(Caso):
     def test_califica_las_filas_ok_y_aparta_las_demas(self):
         ruta = escribir_resultados(
