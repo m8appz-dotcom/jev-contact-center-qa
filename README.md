@@ -6,23 +6,27 @@ This Python CLI combines transcript redaction, a structured Jev model request, d
 
 [Guía completa en español](README.es.md)
 
-## See the original engine at work
+## Try the review workspace
 
-[Explore the native campaign reports](https://kennethyepez.com/projects/jev-contact-center-qa) · [Reproduce the English workflow](docs/NATIVE-DEMO.md)
+[Open the English review workspace](https://kennethyepez.com/work/jev-contact-center-qa/review/) · [Product overview](https://kennethyepez.com/projects/jev-contact-center-qa) · [Reproduce the engine workflow](docs/NATIVE-DEMO.md)
 
-![JEV's original campaign report, generated from a real model run](docs/images/native-report-desktop.jpg)
+![JEV Review Index — conversations, transcript and evidence-based review](docs/images/workspace-desktop.jpg)
+
+Search and filter three authored conversations, save manual reviews and unfinished drafts in your browser, and export your decisions. **View recorded assessment** opens the real eight-criterion JEV result for the selected conversation, including critical failures, uncertainty and its full campaign report. It reads saved results; it does not make a new model request. No provider credential or private inference endpoint is exposed.
+
+The public example keeps manual reviewer decisions separate from model judgments. For fresh evaluations and passkey-protected workspace copies, use the [private/local setup](demo/README.md).
 
 The original Python application audited three existing authored conversations with the live JEV model, generated one report per campaign and resumed without repeating completed requests. English reports retain its original layout, weighted scoring, critical-failure rules and uncertainty queue. These examples demonstrate the connected workflow; they do not establish model accuracy or customer outcomes.
 
-## Review interface
+## Original engine
 
-A conversation review index with evidence notes, resumable drafts and campaign reports.
+The review workspace presents the original Python engine's recorded results alongside its native campaign reports.
 
-![The current JEV Contact Center QA workspace](docs/images/workspace-desktop.jpg)
+![The native JEV campaign report](docs/images/native-report-desktop.jpg)
 
 [Run locally](demo/README.md) · [Desktop and phone views](docs/PRODUCT.md)
 
-The review interface remains available separately. Its three manual ratings are not the engine's eight-item rubric. The local example and connected actions have separate setup instructions and documented limits.
+The three manual ratings are not the engine's eight-item rubric. Live evaluations and private workspace access retain their existing setup and passkey flow; the public example does not simulate either.
 
 ## Project direction and use
 
