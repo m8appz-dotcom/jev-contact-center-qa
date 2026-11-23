@@ -1,0 +1,26 @@
+{
+  "mode": "live_model_on_authored_examples",
+  "date": "2026-11-22",
+  "model": [
+    "jev-1.14.0"
+  ],
+  "conversations": 3,
+  "successful": 3,
+  "campaign_reports": [
+    "informe_Bank_cards.html",
+    "informe_Health_insurance.html",
+    "informe_Home_internet.html"
+  ],
+  "input_tokens": 3404,
+  "estimated_token_cost_usd": 0.00014297,
+  "resume": {
+    "skipped": 3,
+    "new_provider_calls": 0,
+    "results_unchanged": true
+  },
+  "quality_benchmark": false,
+  "customer_data": false,
+  "human_annotations_added": false,
+  "input_sha256": "8fb3e855a2d45cb534519782092c3abae14f24bbf61bf3fe300d10c8eac61bda",
+  "results_sha256": "544db3cfdf8a72eb8c8f6364e455e8928fadb7e04305200cfeccc81b6f67dfd6"
+}

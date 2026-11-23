@@ -269,6 +269,7 @@ def html_campana(
     *,
     desde: str | None = None,
     hasta: str | None = None,
+    note: str = "",
 ) -> str:
     calificaciones = datos["calificaciones"]
     sin_calificar = datos["sin_calificar"]
@@ -277,6 +278,14 @@ def html_campana(
     cola = cola_de_revision(calificaciones)
     coste = coste_del_periodo(calificaciones, sin_calificar)
     inicio, fin = periodo(calificaciones, sin_calificar, desde, hasta)
+
+    if rubrica.get("idioma") == "en":
+        from jevqa.report_en import render_campaign
+
+        return render_campaign(
+            campana, rubrica, umbrales, calificaciones, sin_calificar,
+            total, ranking, cola, coste, inicio, fin, note,
+        )
 
     cabeceras_ranking = ["Agente", "Interacciones", "Nota media", "Con crítica fallada", "Suspensos", "En cola"]
     secciones = []
@@ -396,6 +405,7 @@ def html_campana(
 <p class="sobre">Auditoría de calidad con Jev</p>
 <h1>{_e(campana)}</h1>
 <p class="meta">Periodo {_e(inicio or "—")} a {_e(fin or "—")} · rúbrica {_e(rubrica["id"])} v{_e(rubrica["version"])} · aprueba con {_num(umbrales["aprobado"], 0)} y sin críticas falladas · generado {_e(generado)}</p>
+{f'<p class="meta">{_e(note)}</p>' if note else ''}
 </header>
 {resumen}
 {"".join(secciones)}
@@ -451,6 +461,7 @@ def generar_informes(
     *,
     desde: str | None = None,
     hasta: str | None = None,
+    note: str = "",
 ) -> list[str]:
     """Escribe un HTML por campaña en `carpeta` y devuelve sus rutas."""
     umbrales = resolver_umbrales(rubrica)
@@ -470,6 +481,6 @@ def generar_informes(
 
         ruta = os.path.join(carpeta, nombre)
         with open(ruta, "w", encoding="utf-8", newline="\n") as archivo:
-            archivo.write(html_campana(campana, datos, rubrica, umbrales, desde=desde, hasta=hasta))
+            archivo.write(html_campana(campana, datos, rubrica, umbrales, desde=desde, hasta=hasta, note=note))
         rutas.append(ruta)
     return rutas

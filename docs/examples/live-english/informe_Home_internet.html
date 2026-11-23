@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quality review · Home internet</title><style>
+:root{--fondo:#fbfaf7;--texto:#1d1d1b;--suave:#6b6a64;--linea:#e4e1d8;--caja:#fff;--bien:#2f6f4f;--mal:#a3362a;--acento:#35527a}
+@media (prefers-color-scheme:dark){:root{--fondo:#17181a;--texto:#ecebe6;--suave:#a19f97;--linea:#33342f;--caja:#1f2023;--bien:#7cc49c;--mal:#ef8a7c;--acento:#9db8e0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fondo);color:var(--texto);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:32px 16px 48px}
+h1{font-size:28px;margin:0 0 4px}
+h2{font-size:19px;margin:36px 0 8px;padding-top:16px;border-top:1px solid var(--linea)}
+h3{font-size:15px;margin:20px 0 6px}
+.sobre{margin:0;color:var(--acento);font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.meta,.vacio,footer,section>p{color:var(--suave)}
+.resumen{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:24px 0 0}
+.resumen div{background:var(--caja);border:1px solid var(--linea);border-radius:8px;padding:12px 14px}
+.resumen dt{color:var(--suave);font-size:13px}
+.resumen dd{margin:2px 0 0;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.tabla{overflow-x:auto;border:1px solid var(--linea);border-radius:8px;background:var(--caja)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--linea);white-space:nowrap}
+th{font-size:13px;color:var(--suave);font-weight:600}
+tr:last-child td{border-bottom:0}
+.estado{font-weight:600}.estado.bien{color:var(--bien)}.estado.mal{color:var(--mal)}
+footer{margin-top:40px;font-size:13px}
+</style></head><body><main>
+<header><p class="sobre">Quality review with JEV</p><h1>Home internet</h1>
+<p class="meta">2026-08-03 to 2026-08-03 · support_en v1.0 · pass threshold 70, with no critical failures · generated 2026-11-22</p></header>
+<p class="meta">Authored sample conversations assessed by JEV. This is a recorded workflow example, not a customer audit or an accuracy benchmark.</p>
+<dl class="resumen"><div><dt>Interactions</dt><dd>1</dd></div><div><dt>Average score</dt><dd>80.0</dd></div><div><dt>Critical failures</dt><dd>100.0%</dd></div><div><dt>Failed interactions</dt><dd>100.0%</dd></div><div><dt>Human review</dt><dd>100.0%</dd></div></dl><section><h2>Agent ranking</h2><p>Highest average first. Check critical failures alongside the score.</p><p class="vacio">No agent has enough audited interactions for a ranking yet.</p><h3>Insufficient sample</h3><p>Fewer than five audited interactions: these agents remain outside the ranking.</p><div class="tabla"><table><thead><tr><th>Agent</th><th>Interactions</th><th>Average score</th><th>Critical failures</th><th>Failed interactions</th><th>Review queue</th></tr></thead><tbody><tr><td>Rosa Delgado</td><td>1</td><td>80.0</td><td>100.0%</td><td>100.0%</td><td>1</td></tr></tbody></table></div></section><section><h2>Interactions needing attention</h2><p>Critical failures come first, followed by the lowest scores.</p><div class="tabla"><table><thead><tr><th>Interaction</th><th>Agent</th><th>Date</th><th>Score</th><th>Status</th><th>Critical failures</th><th>Risk</th><th>Contact reason</th></tr></thead><tbody><tr><td>MINI-1</td><td>Rosa Delgado</td><td>2026-08-03</td><td>80.0</td><td><span class="estado mal">Needs attention</span></td><td>Identity verification</td><td>Medium</td><td>technical</td></tr></tbody></table></div></section><section><h2>Human review queue (1)</h2><p>Review uncertain judgments, starting with critical failures and then the lowest scores.</p><div class="tabla"><table><thead><tr><th>Interaction</th><th>Agent</th><th>Score</th><th>Status</th><th>Criteria to review</th><th>Review reason</th></tr></thead><tbody><tr><td>MINI-1</td><td>Rosa Delgado</td><td>80.0</td><td><span class="estado mal">Needs attention</span></td><td>Identity verification, Resolution or escalation, Realistic commitments</td><td>Low model confidence, Ambiguous probability</td></tr></tbody></table></div></section><section><h2>JEV usage for this period</h2><div class="tabla"><table><thead><tr><th>Measure</th><th>Value</th></tr></thead><tbody><tr><td>Audited interactions</td><td>1</td></tr><tr><td>Unscored interactions</td><td>0</td></tr><tr><td>Input tokens</td><td>1,150</td></tr><tr><td>Estimated input-token cost</td><td>US$ 0.000048</td></tr><tr><td>Estimated cost per 1,000 interactions</td><td>US$ 0.0483</td></tr></tbody></table></div><p>Calculated from reported input tokens at US$42 per billion tokens. Output tokens are free.</p></section>
+<footer>A model scores these interactions. A reviewer must assess uncertain judgments; do not make personnel decisions from this report alone.</footer>
+</main></body></html>

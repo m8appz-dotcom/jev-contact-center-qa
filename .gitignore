@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 salidas/
+.demo-state/
 *.local.json
 
 .pytest_cache/

@@ -61,7 +61,8 @@ def _comando_informe(args) -> int:
     rubrica = load_rubric(args.rubrica)
     carpeta = args.salida or CARPETA_SALIDAS
     rutas = generar_informes(
-        args.resultados, carpeta, rubrica, desde=args.desde, hasta=args.hasta
+        args.resultados, carpeta, rubrica, desde=args.desde, hasta=args.hasta,
+        note=args.note,
     )
     if not rutas:
         print("No hay interacciones en ese periodo: no se generó ningún informe.")
@@ -135,6 +136,7 @@ def construir_parser() -> argparse.ArgumentParser:
     informe_cmd.add_argument("--rubrica", default=RUBRICA)
     informe_cmd.add_argument("--desde", help="primera fecha del periodo, AAAA-MM-DD")
     informe_cmd.add_argument("--hasta", help="última fecha del periodo, AAAA-MM-DD")
+    informe_cmd.add_argument("--note", default="", help="contexto del informe, incluido como texto seguro")
     _argumento_fake_sin_efecto(informe_cmd)
     informe_cmd.set_defaults(funcion=_comando_informe)
 
