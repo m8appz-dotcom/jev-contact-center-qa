@@ -1,6 +1,14 @@
 # Run the original JEV application
 
-The Python CLI remains the application: redact a transcript batch, request one structured JEV assessment per conversation, apply the weighted rubric and produce campaign reports. The English report uses the original layout and scoring functions. The earlier local review interface remains available separately.
+The Python CLI redacts a transcript batch, requests one structured JEV assessment per conversation, applies the weighted rubric and produces campaign reports. The English report uses the original layout and scoring functions. The [public Review Index](https://kennethyepez.com/work/jev-contact-center-qa/review/) presents its recorded assessments in the original blue conversation-review interface, alongside manual reviewer decisions. It does not send new model requests.
+
+## Build the public review interface
+
+```bash
+python tools/build_recorded_review.py .demo-state/public-jev
+```
+
+Serve that dedicated output directory as static assets, with its `review/` directory and sibling reports intact. The builder reads the committed real results and calls the native scorer; it makes no provider requests. It preserves the original CSS and copies only the public authored examples, reports and interface files. The source `demo/public/index.html` stays in live/private workspace mode; passkey and live-engine routes remain in the existing local server.
 
 ## Recorded connected example
 

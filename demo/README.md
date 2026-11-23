@@ -4,6 +4,8 @@ Filter or search the three authored conversations. Rate tone, resolution and clo
 
 See [ENGINES.md](ENGINES.md) for the actual engine connection, additional runtime setup, credentials and acceptance limits.
 
+[Open the public English workspace](https://kennethyepez.com/work/jev-contact-center-qa/review/). It retains this original interface and uses **View recorded assessment** for the three real JEV results already saved in the repository. Manual reviews and drafts stay in your browser; **Export reviews** downloads your completed decisions. No new inference, customer data or passkey enrollment is required for this public example. **Private workspace setup** opens these instructions; it does not pretend to sign into a hosted private service. The local server below retains its existing passkey access and **Evaluate selected conversation** action for fresh private evaluations.
+
 ## Run locally
 
 Requires Node.js 22 or newer and npm. From the repository root:

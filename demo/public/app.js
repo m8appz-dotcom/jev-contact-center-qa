@@ -1,4 +1,5 @@
 import { engineAction, showEngineResult } from "./engine-client.js";
+import { recordedMode, loadRecordedAssessment } from "./recorded-assessment.js";
 import {
   $,
   $$,
@@ -25,6 +26,27 @@ let reviews = load("jev", {}, validReviews),
   view = "review",
   undo = null;
 const persist = () => save("jev", reviews);
+async function showRecordedAssessment(button) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = "Loading assessment…";
+  try {
+    const job = await loadRecordedAssessment(selected);
+    const result = job.result;
+    showEngineResult(
+      "Recorded JEV assessment · " + result.conversation,
+      job,
+      `<p>${result.score}/100 · ${esc(result.outcome)}</p><p>${esc(result.scope)}</p><p>${result.needsReview ? "Human review required: some judgments are uncertain." : "No uncertainty flags in this assessment."}</p><table><thead><tr><th>Criterion</th><th>Assessment</th><th>Confidence</th></tr></thead><tbody>${result.criteria.map((c) => `<tr><td>${esc(c.label)}${c.critical ? " · critical" : ""}</td><td>${c.meets ? "Meets" : "Needs attention"}${c.needsReview ? " · review" : ""}</td><td>${Math.round(c.confidence * 100)}%</td></tr>`).join("")}</tbody></table><p><a href="${job.reportUrl}" target="_blank" rel="noopener">Open full campaign report ↗</a></p>`,
+    );
+  } catch (error) {
+    notify(error.message, true);
+  } finally {
+    if (button.isConnected) {
+      button.disabled = !selected;
+      button.textContent = label;
+    }
+  }
+}
 function csvCell(value) {
   const text = String(value ?? "");
   return (
@@ -78,13 +100,13 @@ function render() {
   if (!visible.some((c) => c.id === selected)) selected = null;
   const reviewed = Object.keys(reviews).length;
   draw(
-    `<div class="jev-shell"><header class="jev-header"><a href="./" class="jev-brand">JEV<span> / </span>Review index</a><span class="jev-collection">Conversations [03]</span>${access()}</header>${tabs(
+    `<div class="jev-shell"><header class="jev-header"><a href="./" class="jev-brand">JEV<span> / </span>Review index</a><span class="jev-collection">Conversations [03]</span>${recordedMode ? '<a class="access-button" href="https://github.com/m8appz-dotcom/jev-contact-center-qa/blob/mvp-qa/demo/README.md">Private workspace setup ↗</a>' : access()}</header>${tabs(
       [
         ["review", "Review conversations"],
         ["report", "Review report"],
       ],
       view,
-    )}<nav class="jev-filters" aria-label="Campaign filter">${[["all", "All campaigns"], ...Object.entries(campaigns)].map(([id, title]) => `<button data-campaign="${id}" aria-pressed="${campaign === id}"><span aria-hidden="true">[${campaign === id ? "×" : " "}]</span> ${title}</button>`).join("")}</nav><div class="jev-tools"><label>Search conversations<input id="conversation-search" type="search" value="${esc(query)}" placeholder="Agent, phrase or campaign"></label><label>Review status<select id="review-status"><option value="all" ${status === "all" ? "selected" : ""}>All conversations</option><option value="pending" ${status === "pending" ? "selected" : ""}>To review</option><option value="reviewed" ${status === "reviewed" ? "selected" : ""}>Reviewed</option></select></label><button data-engine-evaluate ${!selected ? "disabled" : ""}>Evaluate selected conversation</button><button class="text-button" data-export ${!reviewed ? "disabled" : ""}>Export reviews ↓</button></div><div class="jev-scope"><span>Authored conversations · English adaptations</span><span>${reviewed} of 3 reviewed in this browser</span></div><main id="main" class="jev-index">${view === "report" ? report(visible) : visible.length ? visible.map((c) => row(c)).join("") : '<div class="empty"><h2>No conversations match.</h2><p>Change the search or reset the filters.</p><button class="text-button" data-reset>Reset filters</button></div>'}</main><footer class="review-footer"><span>JEV Contact Center QA</span><span>${scope}</span></footer></div>`,
+    )}<nav class="jev-filters" aria-label="Campaign filter">${[["all", "All campaigns"], ...Object.entries(campaigns)].map(([id, title]) => `<button data-campaign="${id}" aria-pressed="${campaign === id}"><span aria-hidden="true">[${campaign === id ? "×" : " "}]</span> ${title}</button>`).join("")}</nav><div class="jev-tools"><label>Search conversations<input id="conversation-search" type="search" value="${esc(query)}" placeholder="Agent, phrase or campaign"></label><label>Review status<select id="review-status"><option value="all" ${status === "all" ? "selected" : ""}>All conversations</option><option value="pending" ${status === "pending" ? "selected" : ""}>To review</option><option value="reviewed" ${status === "reviewed" ? "selected" : ""}>Reviewed</option></select></label><button data-engine-evaluate ${!selected ? "disabled" : ""}>${recordedMode ? "View recorded assessment" : "Evaluate selected conversation"}</button><button class="text-button" data-export ${!reviewed ? "disabled" : ""}>Export reviews ↓</button></div><div class="jev-scope"><span>${recordedMode ? "Authored conversations · Recorded JEV assessments" : "Authored conversations · English adaptations"}</span><span>${reviewed} of 3 reviewed in this browser</span></div><main id="main" class="jev-index">${view === "report" ? report(visible) : visible.length ? visible.map((c) => row(c)).join("") : '<div class="empty"><h2>No conversations match.</h2><p>Change the search or reset the filters.</p><button class="text-button" data-reset>Reset filters</button></div>'}</main><footer class="review-footer"><span>JEV Contact Center QA</span><span>${scope}</span></footer></div>`,
     () => {
       $$("[data-tab]").forEach(
         (b) =>
@@ -135,13 +157,15 @@ function render() {
           }),
       );
       $("[data-engine-evaluate]").onclick = (e) =>
-        engineAction(e.currentTarget, "evaluate", { id: selected }, (job) =>
-          showEngineResult(
-            "JEV evaluation · " + job.result.conversation,
-            job,
-            `<p>${job.result.score}/100 · ${esc(job.result.outcome)}</p><p>${esc(job.result.scope)}</p><table><thead><tr><th>Criterion</th><th>Assessment</th><th>Confidence</th></tr></thead><tbody>${job.result.criteria.map((c) => `<tr><td>${esc(c.label)}${c.critical ? " · critical" : ""}</td><td>${c.meets ? "Meets" : "Needs attention"}${c.needsReview ? " · review" : ""}</td><td>${Math.round(c.confidence * 100)}%</td></tr>`).join("")}</tbody></table>`,
-          ),
-        );
+        recordedMode
+          ? showRecordedAssessment(e.currentTarget)
+          : engineAction(e.currentTarget, "evaluate", { id: selected }, (job) =>
+              showEngineResult(
+                "JEV evaluation · " + job.result.conversation,
+                job,
+                `<p>${job.result.score}/100 · ${esc(job.result.outcome)}</p><p>${esc(job.result.scope)}</p><table><thead><tr><th>Criterion</th><th>Assessment</th><th>Confidence</th></tr></thead><tbody>${job.result.criteria.map((c) => `<tr><td>${esc(c.label)}${c.critical ? " · critical" : ""}</td><td>${c.meets ? "Meets" : "Needs attention"}${c.needsReview ? " · review" : ""}</td><td>${Math.round(c.confidence * 100)}%</td></tr>`).join("")}</tbody></table>`,
+              ),
+            );
       $("[data-export]").onclick = exportReviews;
       $("#review-form")?.addEventListener("input", (e) => {
         drafts[selected] = Object.fromEntries(new FormData(e.currentTarget));
